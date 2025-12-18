@@ -619,27 +619,86 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     if (selectedMeterIds.size === 0) return;
     
     const confirmed = window.confirm(
-      `Are you sure you want to delete ${selectedMeterIds.size} meter${selectedMeterIds.size !== 1 ? 's' : ''}? This action cannot be undone and will also delete all associated readings and connections.`
+      `Are you sure you want to delete ${selectedMeterIds.size} meter${selectedMeterIds.size !== 1 ? 's' : ''}?\n\n` +
+      `This will permanently remove:\n` +
+      `• All CSV files and readings\n` +
+      `• All hierarchical readings\n` +
+      `• All schematic connections and positions\n` +
+      `• The meters themselves\n\n` +
+      `This action cannot be undone.`
     );
     
     if (!confirmed) return;
     
     setIsBulkDeleting(true);
+    const meterIds = Array.from(selectedMeterIds);
     
     try {
+      // 1. Delete schematic lines where any of these meters is referenced in metadata
+      const { data: schematicLines } = await supabase
+        .from('schematic_lines')
+        .select('id, metadata');
+      
+      if (schematicLines?.length) {
+        const linesToDelete = schematicLines.filter(line => {
+          const metadata = line.metadata as any;
+          return meterIds.includes(metadata?.parent_meter_id) || 
+                 meterIds.includes(metadata?.child_meter_id);
+        });
+        
+        if (linesToDelete.length > 0) {
+          await supabase
+            .from('schematic_lines')
+            .delete()
+            .in('id', linesToDelete.map(l => l.id));
+        }
+      }
+
+      // 2. Delete meter positions on schematics
+      await supabase
+        .from('meter_positions')
+        .delete()
+        .in('meter_id', meterIds);
+
+      // 3. Delete meter connections (parent-child relationships)
+      // Need to handle both directions
+      for (const meterId of meterIds) {
+        await supabase
+          .from('meter_connections')
+          .delete()
+          .or(`parent_meter_id.eq.${meterId},child_meter_id.eq.${meterId}`);
+      }
+
+      // 4. Delete hierarchical meter readings (in batches to avoid timeout)
+      const batchSize = 50;
+      for (let i = 0; i < meterIds.length; i += batchSize) {
+        const batch = meterIds.slice(i, i + batchSize);
+        await supabase
+          .from('hierarchical_meter_readings')
+          .delete()
+          .in('meter_id', batch);
+      }
+
+      // 5. Delete meter readings and CSV data using edge function
+      await supabase.functions.invoke('delete-meter-data', {
+        body: { meterIds }
+      });
+
+      // 6. Finally delete the meters themselves
       const { error } = await supabase
         .from("meters")
         .delete()
-        .in("id", Array.from(selectedMeterIds));
+        .in("id", meterIds);
 
       if (error) {
         toast.error("Failed to delete meters");
       } else {
-        toast.success(`Successfully deleted ${selectedMeterIds.size} meter${selectedMeterIds.size !== 1 ? 's' : ''}`);
+        toast.success(`Successfully deleted ${selectedMeterIds.size} meter${selectedMeterIds.size !== 1 ? 's' : ''} and all associated data`);
         setSelectedMeterIds(new Set());
         fetchMeters();
       }
     } catch (error) {
+      console.error("Error during bulk meter deletion:", error);
       toast.error("An error occurred while deleting meters");
     } finally {
       setIsBulkDeleting(false);
@@ -654,6 +713,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
       `This will permanently remove:\n` +
       `• All CSV files from storage\n` +
       `• All meter readings from database\n` +
+      `• All hierarchical meter readings\n` +
       `• All CSV file metadata\n\n` +
       `The meters themselves will NOT be deleted.\n\n` +
       `This action cannot be undone.`
@@ -666,6 +726,19 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     
     try {
       const meterIds = Array.from(selectedMeterIds);
+      
+      // First, delete hierarchical meter readings for all selected meters (in batches)
+      const hierarchicalBatchSize = 50;
+      let totalHierarchicalDeleted = 0;
+      for (let i = 0; i < meterIds.length; i += hierarchicalBatchSize) {
+        const batch = meterIds.slice(i, i + hierarchicalBatchSize);
+        const { count } = await supabase
+          .from('hierarchical_meter_readings')
+          .delete({ count: 'exact' })
+          .in('meter_id', batch);
+        totalHierarchicalDeleted += count || 0;
+      }
+      
       const batchSize = 5; // Process 5 meters at a time for progress updates
       let totalFilesDeleted = 0;
       let totalReadingsDeleted = 0;
@@ -696,7 +769,8 @@ export default function MetersTab({ siteId }: MetersTabProps) {
       
       toast.success(
         `Successfully deleted CSV data for ${totalProcessed} meter${totalProcessed !== 1 ? 's' : ''}: ` +
-        `${totalFilesDeleted} file${totalFilesDeleted !== 1 ? 's' : ''} and ${totalReadingsDeleted.toLocaleString()} reading${totalReadingsDeleted !== 1 ? 's' : ''} removed`,
+        `${totalFilesDeleted} file${totalFilesDeleted !== 1 ? 's' : ''}, ${totalReadingsDeleted.toLocaleString()} reading${totalReadingsDeleted !== 1 ? 's' : ''}, ` +
+        `and ${totalHierarchicalDeleted.toLocaleString()} hierarchical reading${totalHierarchicalDeleted !== 1 ? 's' : ''} removed`,
         { duration: 5000 }
       );
       
