@@ -982,7 +982,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue,
         .delete()
         .eq('site_id', siteId);
 
-      // Step 4: Delete all meter readings
+      // Step 5: Delete all meter readings
       const { data, error } = await supabase.rpc('delete_site_readings', {
         p_site_id: siteId
       });
@@ -991,12 +991,33 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue,
 
       // Extract the count - RPC returns array of objects with total_deleted column
       const totalDeleted = Array.isArray(data) && data.length > 0 ? data[0].total_deleted : 0;
+
+      // Step 6: Delete all hierarchical meter readings for this site
+      const { data: siteMeters } = await supabase
+        .from('meters')
+        .select('id')
+        .eq('site_id', siteId);
+
+      let hierarchicalDeleted = 0;
+      if (siteMeters && siteMeters.length > 0) {
+        const meterIds = siteMeters.map(m => m.id);
+        // Delete in batches to avoid timeout
+        const batchSize = 50;
+        for (let i = 0; i < meterIds.length; i += batchSize) {
+          const batch = meterIds.slice(i, i + batchSize);
+          const { count } = await supabase
+            .from('hierarchical_meter_readings')
+            .delete({ count: 'exact' })
+            .in('meter_id', batch);
+          hierarchicalDeleted += count || 0;
+        }
+      }
       
       // Clear local state completely
       setFiles([]);
       
       toast.success(
-        `Complete clear: ${totalDeleted.toLocaleString()} readings deleted, ${deletedFilesCount} CSV file(s) removed`,
+        `Complete clear: ${totalDeleted.toLocaleString()} readings, ${hierarchicalDeleted.toLocaleString()} hierarchical readings, ${deletedFilesCount} CSV file(s) removed`,
         { duration: 5000 }
       );
       
