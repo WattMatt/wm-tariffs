@@ -593,15 +593,12 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue,
           continue;
         }
 
+        // Use upsert: true to overwrite any orphaned files left from failed deletions
         const { error: uploadError } = await supabase.storage
           .from(bucket)
-          .upload(filePath, fileItem.file!, { upsert: false });
+          .upload(filePath, fileItem.file!, { upsert: true });
 
         if (uploadError) {
-          if (uploadError.message.includes('already exists')) {
-            toast.info(`${fileItem.meterNumber}: Already exists, skipped`);
-            continue;
-          }
           throw uploadError;
         }
 
