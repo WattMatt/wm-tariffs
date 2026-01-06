@@ -1031,6 +1031,63 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue,
     }
   };
 
+  const [isCleaningOrphans, setIsCleaningOrphans] = useState(false);
+
+  const handleCleanupOrphanedFiles = async () => {
+    setIsCleaningOrphans(true);
+    try {
+      // Get site and client info
+      const { data: siteData, error: siteError } = await supabase
+        .from('sites')
+        .select('name, clients(name)')
+        .eq('id', siteId)
+        .single();
+
+      if (siteError || !siteData) {
+        toast.error("Failed to get site information");
+        return;
+      }
+
+      const clientName = (siteData.clients as any)?.name || '';
+      const siteName = siteData.name || '';
+
+      // Sanitize names to match storage path format
+      const sanitizedClientName = clientName.trim().replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, ' ');
+      const sanitizedSiteName = siteName.trim().replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, ' ');
+
+      toast.info("Scanning for orphaned files...");
+
+      const { data, error } = await supabase.functions.invoke('cleanup-orphaned-csvs', {
+        body: {
+          siteId,
+          clientName: sanitizedClientName,
+          siteName: sanitizedSiteName
+        }
+      });
+
+      if (error) {
+        console.error("Cleanup error:", error);
+        toast.error("Failed to clean up orphaned files: " + error.message);
+        return;
+      }
+
+      if (data?.success) {
+        if (data.deletedCount > 0) {
+          toast.success(`Cleaned up ${data.deletedCount} orphaned file(s) from storage`);
+        } else {
+          toast.info("No orphaned files found in storage");
+        }
+      } else {
+        toast.error("Cleanup failed: " + (data?.error || "Unknown error"));
+      }
+    } catch (error: any) {
+      console.error("Error cleaning up orphaned files:", error);
+      toast.error("Failed to clean up orphaned files: " + error.message);
+    } finally {
+      setIsCleaningOrphans(false);
+    }
+  };
+
   const handleParseAll = async (forceParse: boolean = false) => {
     // Parse files that haven't been successfully parsed, OR force re-parse all
     const filesToParse = forceParse 
@@ -2149,6 +2206,31 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue,
                     </>
                   )}
                 </Button>
+
+                <div className="border-t pt-4 mt-4">
+                  <p className="text-sm font-medium mb-2">Troubleshooting</p>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    If uploads fail with "already exists" errors after deletion, use this to clean up orphaned storage files.
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={handleCleanupOrphanedFiles}
+                    disabled={isCleaningOrphans || isClearing}
+                    className="w-full"
+                  >
+                    {isCleaningOrphans ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                        Scanning & Cleaning...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="w-4 h-4 mr-2" />
+                        Clean Orphaned Storage Files
+                      </>
+                    )}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
