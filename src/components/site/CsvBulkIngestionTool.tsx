@@ -106,6 +106,8 @@ interface FileItem {
   preview?: CsvPreview;
   metadataFieldNames?: Record<number, string>;
   contentHash?: string;
+  storageStatus?: 'new' | 'exists-in-storage' | 'duplicate-hash';
+  existingFileName?: string;
 }
 
 export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue, reparseMeterIds, onReparseDialogClose }: CsvBulkIngestionToolProps) {
@@ -400,16 +402,20 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue,
     console.log(`Processing ${selectedFiles.length} files with ${meters.length} meters available`);
 
     const newFiles: FileItem[] = [];
-    // Only check duplicates against valid files (exclude error status and missing files)
-    const existingHashes = new Set(
-      files
-        .filter(f => f.status !== 'error' && f.contentHash)
-        .map(f => f.contentHash!)
-    );
+    // Build a map of existing files for quick lookup
+    const existingByHash = new Map<string, FileItem>();
+    const existingByName = new Map<string, FileItem>();
+    
+    files
+      .filter(f => !f.isNew && f.path) // Only check against files already in storage
+      .forEach(f => {
+        if (f.contentHash) existingByHash.set(f.contentHash, f);
+        existingByName.set(f.name.toLowerCase(), f);
+      });
 
     console.log(`🔄 Processing ${selectedFiles.length} selected file(s)...`);
+    console.log(`📦 Existing files in storage: ${existingByName.size} by name, ${existingByHash.size} by hash`);
     const failedFiles: { name: string; error: string }[] = [];
-    const duplicateFiles: string[] = [];
 
     for (const file of Array.from(selectedFiles)) {
       try {
@@ -447,12 +453,25 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue,
 
         // Generate content hash
         const contentHash = await generateFileHash(file);
-        const isDuplicate = existingHashes.has(contentHash);
-
-        if (isDuplicate) {
-          console.log(`  ⚠️ Duplicate detected (skipping)`);
-          duplicateFiles.push(file.name);
-          continue;
+        
+        // Check storage status
+        let storageStatus: 'new' | 'exists-in-storage' | 'duplicate-hash' = 'new';
+        let existingFileName: string | undefined;
+        
+        // Check if content hash matches an existing file
+        const hashMatch = existingByHash.get(contentHash);
+        if (hashMatch) {
+          storageStatus = 'duplicate-hash';
+          existingFileName = hashMatch.name;
+          console.log(`  ⚠️ Duplicate content found: ${existingFileName}`);
+        } else {
+          // Check if filename matches an existing file
+          const nameMatch = existingByName.get(file.name.toLowerCase());
+          if (nameMatch) {
+            storageStatus = 'exists-in-storage';
+            existingFileName = nameMatch.name;
+            console.log(`  📁 File with same name exists in storage`);
+          }
         }
 
         // Generate preview
@@ -468,10 +487,11 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue,
           isNew: true,
           preview,
           metadataFieldNames: {},
-          contentHash
+          contentHash,
+          storageStatus,
+          existingFileName
         });
-        existingHashes.add(contentHash);
-        console.log(`  ✅ Successfully added to queue`);
+        console.log(`  ✅ Added to queue with status: ${storageStatus}`);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error(`  ❌ Failed to process ${file.name}:`, error);
@@ -479,20 +499,26 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue,
       }
     }
 
-    console.log(`✅ File processing complete: ${newFiles.length} added, ${duplicateFiles.length} duplicates, ${failedFiles.length} failed`);
-
-    // Show user feedback
-    if (duplicateFiles.length > 0) {
-      toast.warning(`${duplicateFiles.length} duplicate file(s) detected and skipped`);
-    }
+    // Count by storage status
+    const newCount = newFiles.filter(f => f.storageStatus === 'new').length;
+    const existsCount = newFiles.filter(f => f.storageStatus === 'exists-in-storage').length;
+    const duplicateCount = newFiles.filter(f => f.storageStatus === 'duplicate-hash').length;
     
+    console.log(`✅ File processing complete: ${newCount} new, ${existsCount} will overwrite, ${duplicateCount} duplicates, ${failedFiles.length} failed`);
+
     if (failedFiles.length > 0) {
       toast.error(`Failed to process ${failedFiles.length} file(s): ${failedFiles.map(f => f.name).join(', ')}`);
     }
     if (newFiles.length > 0) {
+      // Show summary toast
+      const summaryParts = [];
+      if (newCount > 0) summaryParts.push(`${newCount} new`);
+      if (existsCount > 0) summaryParts.push(`${existsCount} will overwrite`);
+      if (duplicateCount > 0) summaryParts.push(`${duplicateCount} duplicate${duplicateCount > 1 ? 's' : ''}`);
+      toast.success(`Added ${newFiles.length} file(s): ${summaryParts.join(', ')}`);
+      
       setFiles(prev => [...prev, ...newFiles]);
-      toast.success(`Added ${newFiles.length} new file(s) for upload`);
-    } else if (failedFiles.length === 0 && duplicateFiles.length === 0) {
+    } else if (failedFiles.length === 0) {
       toast.info('No files to add');
     }
     
@@ -540,10 +566,16 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue,
   };
 
   const handleUploadAll = async () => {
-    const pendingFiles = files.filter(f => f.status === "pending" && f.meterId && f.file);
+    // Skip duplicate files from upload
+    const pendingFiles = files.filter(f => 
+      f.status === "pending" && 
+      f.meterId && 
+      f.file && 
+      f.storageStatus !== 'duplicate-hash'
+    );
     
     if (pendingFiles.length === 0) {
-      toast.error("No files ready to upload");
+      toast.error("No files ready to upload (duplicates are excluded)");
       return;
     }
 
@@ -1437,13 +1469,43 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue,
                 </div>
               ) : (
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-sm">
-                    {files.filter(f => f.status === "pending").length} file(s) ready to upload
-                  </h3>
+                {/* Summary counts */}
+                {(() => {
+                  const pending = files.filter(f => f.status === "pending");
+                  const newCount = pending.filter(f => f.storageStatus === 'new').length;
+                  const existsCount = pending.filter(f => f.storageStatus === 'exists-in-storage').length;
+                  const duplicateCount = pending.filter(f => f.storageStatus === 'duplicate-hash').length;
+                  
+                  return (
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <h3 className="font-semibold text-sm">
+                        {pending.length} file(s) selected
+                      </h3>
+                      <div className="flex items-center gap-2 text-xs">
+                        {newCount > 0 && (
+                          <Badge variant="default" className="bg-green-600 hover:bg-green-600">
+                            {newCount} new
+                          </Badge>
+                        )}
+                        {existsCount > 0 && (
+                          <Badge variant="outline" className="border-yellow-500 text-yellow-600">
+                            {existsCount} will overwrite
+                          </Badge>
+                        )}
+                        {duplicateCount > 0 && (
+                          <Badge variant="outline" className="border-orange-500 text-orange-600">
+                            {duplicateCount} duplicate{duplicateCount > 1 ? 's' : ''}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+                
+                <div className="flex items-center justify-end">
                   <Button
                     onClick={handleUploadAll}
-                    disabled={isProcessing || files.filter(f => f.status === "pending" && f.meterId).length === 0}
+                    disabled={isProcessing || files.filter(f => f.status === "pending" && f.meterId && f.storageStatus !== 'duplicate-hash').length === 0}
                   >
                     Upload All
                   </Button>
@@ -1461,18 +1523,56 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue,
                     !assignedMeterIds.includes(meter.id) || meter.id === fileItem.meterId
                   );
                   
+                  // Determine status badge
+                  const getStorageStatusBadge = () => {
+                    switch (fileItem.storageStatus) {
+                      case 'new':
+                        return (
+                          <Badge variant="default" className="bg-green-600 hover:bg-green-600 text-xs">
+                            New
+                          </Badge>
+                        );
+                      case 'exists-in-storage':
+                        return (
+                          <Badge variant="outline" className="border-yellow-500 text-yellow-600 text-xs" title={`Will overwrite: ${fileItem.existingFileName}`}>
+                            Already in Storage
+                          </Badge>
+                        );
+                      case 'duplicate-hash':
+                        return (
+                          <Badge variant="outline" className="border-orange-500 text-orange-600 text-xs" title={`Same content as: ${fileItem.existingFileName}`}>
+                            Duplicate
+                          </Badge>
+                        );
+                      default:
+                        return null;
+                    }
+                  };
+                  
                   return (
                     <Collapsible key={actualIndex}>
-                      <Card className="border-border/50">
+                      <Card className={cn(
+                        "border-border/50",
+                        fileItem.storageStatus === 'duplicate-hash' && "opacity-60"
+                      )}>
                         <CardContent className="pt-4">
                           <div className="flex items-center gap-3">
                             {getStatusIcon(fileItem.status)}
                             
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{fileItem.name}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium truncate">{fileItem.name}</p>
+                                {getStorageStatusBadge()}
+                              </div>
                               <p className="text-xs text-muted-foreground">
                                 {fileItem.size ? `${(fileItem.size / 1024).toFixed(1)} KB` : 'Unknown size'}
                                 {fileItem.preview && ` • ${fileItem.preview.headers.length} columns detected`}
+                                {fileItem.storageStatus === 'exists-in-storage' && fileItem.existingFileName && (
+                                  <span className="text-yellow-600"> • Will replace existing file</span>
+                                )}
+                                {fileItem.storageStatus === 'duplicate-hash' && fileItem.existingFileName && (
+                                  <span className="text-orange-600"> • Same content as "{fileItem.existingFileName}"</span>
+                                )}
                               </p>
                             </div>
 
