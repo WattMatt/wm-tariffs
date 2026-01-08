@@ -1134,6 +1134,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         // Section 3: Tariff Configuration
         addSectionHeading("3. TARIFF CONFIGURATION", 16, true);
+        addSpacer(10); // Prevent overlap with first subsection
         
         // Helper functions for formatting
         const formatChargeType = (type: string): string => {
@@ -1206,9 +1207,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               const chart2X = leftMargin + chartWidth + chartSpacing;
               const chart3X = leftMargin + (2 * chartWidth) + (2 * chartSpacing);
               
+              let chartsRendered = false;
+              
               // Helper to add chart (handles both SVG and PNG)
-              const addChartToPdf = async (chartData: any, x: number) => {
-                if (!chartData) return;
+              const addChartToPdf = async (chartData: any, x: number): Promise<boolean> => {
+                if (!chartData) return false;
                 
                 try {
                   if (chartData.type === 'svg') {
@@ -1216,23 +1219,46 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                     const parser = new DOMParser();
                     const svgDoc = parser.parseFromString(chartData.content, 'image/svg+xml');
                     const svgElement = svgDoc.documentElement;
+                    
+                    // Check for parse errors
+                    const parseError = svgDoc.querySelector('parsererror');
+                    if (parseError) {
+                      console.error("SVG parse error:", parseError.textContent);
+                      return false;
+                    }
+                    
                     await svg2pdf(svgElement, pdf, { x, y: yPos, width: chartWidth, height: chartHeight });
+                    return true;
                   } else if (chartData.type === 'png' || typeof chartData === 'string') {
                     // Legacy PNG support (chartData is base64 string or has content property)
                     const imgData = typeof chartData === 'string' ? chartData : chartData.content;
                     pdf.addImage(imgData, 'PNG', x, yPos, chartWidth, chartHeight);
+                    return true;
                   }
                 } catch (err) {
                   console.error("Error adding chart:", err);
                 }
+                return false;
               };
               
               // Add charts (await for SVG support)
-              await addChartToPdf(charts.basic, chart1X);
-              await addChartToPdf(charts.energy, chart2X);
-              await addChartToPdf(charts.demand, chart3X);
+              if (await addChartToPdf(charts.basic, chart1X)) chartsRendered = true;
+              if (await addChartToPdf(charts.energy, chart2X)) chartsRendered = true;
+              if (await addChartToPdf(charts.demand, chart3X)) chartsRendered = true;
               
-              yPos += chartHeight + 6;
+              // Only advance yPos if charts were rendered
+              if (chartsRendered) {
+                yPos += chartHeight + 6;
+              }
+            } else {
+              // No charts available - add text placeholder
+              pdf.setFontSize(8);
+              pdf.setFont("helvetica", "italic");
+              pdf.setTextColor(128, 128, 128);
+              pdf.text("No chart data available for this tariff", leftMargin, yPos);
+              pdf.setTextColor(0, 0, 0);
+              pdf.setFont("helvetica", "normal");
+              yPos += 10;
             }
             
             // Render tariff details tables side by side
@@ -2570,12 +2596,15 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             try {
               // Try SVG first, fall back to PNG for backwards compatibility
               let filePath = `${basePath}/${sanitizedTariff}-${filename}.svg`;
+              console.log(`Attempting to fetch chart: ${filePath}`);
+              
               let { data, error } = await supabase.storage
                 .from('tariff-files')
                 .download(filePath);
 
               // Fallback to PNG if SVG not found
               if (error || !data) {
+                console.log(`SVG not found for ${tariffName} - ${filename}, trying PNG fallback`);
                 filePath = `${basePath}/${sanitizedTariff}-${filename}.png`;
                 const fallbackResult = await supabase.storage
                   .from('tariff-files')
@@ -2588,14 +2617,18 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                 // For SVG, store as text; for PNG, convert to base64
                 if (filePath.endsWith('.svg')) {
                   const svgText = await data.text();
+                  console.log(`Successfully loaded SVG chart for ${tariffName} - ${filename}`);
                   (tariffChartImages[tariffName] as any)[key] = { type: 'svg', content: svgText };
                 } else {
                   const base64 = await blobToBase64(data);
+                  console.log(`Successfully loaded PNG chart for ${tariffName} - ${filename}`);
                   (tariffChartImages[tariffName] as any)[key] = { type: 'png', content: base64 };
                 }
+              } else {
+                console.warn(`Chart not found in storage: ${tariffName} - ${filename}`, error?.message);
               }
             } catch (e) {
-              console.log(`Chart not found: ${tariffName} - ${filename}`);
+              console.error(`Error fetching chart for ${tariffName} - ${filename}:`, e);
             }
           }
         }
