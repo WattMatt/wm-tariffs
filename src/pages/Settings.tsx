@@ -5,18 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Save, Loader2, Trash2, FolderOpen, ChevronDown, Database } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Save, Loader2 } from "lucide-react";
+import { StorageFileBrowser } from "@/components/settings/StorageFileBrowser";
 
 const Settings = () => {
   const navigate = useNavigate();
@@ -24,20 +16,13 @@ const Settings = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [isCleaningUp, setIsCleaningUp] = useState(false);
-  const [isDeletingFolder, setIsDeletingFolder] = useState(false);
-  const [isLoadingFolders, setIsLoadingFolders] = useState(false);
   const [settingsId, setSettingsId] = useState<string>("");
   const [appName, setAppName] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [currentPath, setCurrentPath] = useState<string>("");
-  const [folders, setFolders] = useState<Array<{ name: string; path: string }>>([]);
-  const [selectedBucket, setSelectedBucket] = useState<'client-files' | 'tariff-files'>('client-files');
 
   useEffect(() => {
     checkAuth();
     loadSettings();
-    loadFolders("");
   }, []);
 
   const checkAuth = async () => {
@@ -73,63 +58,10 @@ const Settings = () => {
     }
   };
 
-  const loadFolders = async (path: string, bucket: 'client-files' | 'tariff-files' = selectedBucket) => {
-    setIsLoadingFolders(true);
-    try {
-      const { data, error } = await supabase.storage
-        .from(bucket)
-        .list(path, {
-          limit: 100,
-          sortBy: { column: 'name', order: 'asc' }
-        });
-
-      if (error) throw error;
-
-      // Filter only folders (items with id === null are folders in Supabase)
-      const folderList = (data || [])
-        .filter(item => item.id === null)
-        .map(item => ({
-          name: item.name,
-          path: path ? `${path}/${item.name}` : item.name
-        }));
-
-      setFolders(folderList);
-    } catch (error: any) {
-      console.error("Error loading folders:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load folders",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoadingFolders(false);
-    }
-  };
-
-  const handleBucketChange = (bucket: 'client-files' | 'tariff-files') => {
-    setSelectedBucket(bucket);
-    setCurrentPath("");
-    loadFolders("", bucket);
-  };
-
-  const handleFolderClick = (path: string) => {
-    setCurrentPath(path);
-    loadFolders(path);
-  };
-
-  const handleGoBack = () => {
-    const pathParts = currentPath.split('/');
-    pathParts.pop();
-    const newPath = pathParts.join('/');
-    setCurrentPath(newPath);
-    loadFolders(newPath);
-  };
-
   const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith("image/")) {
       toast({
         title: "Invalid file",
@@ -139,7 +71,6 @@ const Settings = () => {
       return;
     }
 
-    // Validate file size (max 2MB)
     if (file.size > 2 * 1024 * 1024) {
       toast({
         title: "File too large",
@@ -151,7 +82,6 @@ const Settings = () => {
 
     setIsUploading(true);
     try {
-      // Upload file
       const { generateAppAssetPath } = await import("@/lib/storagePaths");
       const fileExt = file.name.split(".").pop();
       const fileName = `app-logo-${Date.now()}.${fileExt}`;
@@ -166,7 +96,6 @@ const Settings = () => {
 
       if (uploadError) throw uploadError;
 
-      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from(bucket)
         .getPublicUrl(filePath);
@@ -216,7 +145,6 @@ const Settings = () => {
         description: "Settings saved successfully. Refresh the page to see changes.",
       });
       
-      // Reload the page to refresh all components
       setTimeout(() => {
         window.location.reload();
       }, 1000);
@@ -229,90 +157,6 @@ const Settings = () => {
       });
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const handleCleanupSnippets = async () => {
-    if (!currentPath) {
-      toast({
-        title: "No Folder Selected",
-        description: "Please select a folder from the dropdown first",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsCleaningUp(true);
-    try {
-      toast({
-        title: "Cleanup Started",
-        description: `Deleting all files in: ${currentPath}`,
-      });
-
-      const { data, error } = await supabase.functions.invoke('cleanup-orphaned-snippets', {
-        body: { folderPath: currentPath, bucket: selectedBucket }
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Cleanup Complete",
-        description: `Deleted ${data.filesDeleted} files and removed ${data.databaseReferencesRemoved} database references from ${currentPath}`,
-      });
-
-      // Refresh the folder list after cleanup
-      loadFolders(currentPath);
-    } catch (error: any) {
-      console.error("Cleanup error:", error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to cleanup folder",
-        variant: "destructive",
-      });
-    } finally {
-      setIsCleaningUp(false);
-    }
-  };
-
-  const handleDeleteFolder = async () => {
-    if (!currentPath) {
-      toast({
-        title: "No Folder Selected",
-        description: "Please select a folder from the dropdown first",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsDeletingFolder(true);
-    try {
-      toast({
-        title: "Deleting Folder",
-        description: `Removing folder and all contents: ${currentPath}`,
-      });
-
-      const { data, error } = await supabase.functions.invoke('cleanup-orphaned-snippets', {
-        body: { folderPath: currentPath, bucket: selectedBucket }
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Folder Deleted",
-        description: `Deleted ${data.filesDeleted} files and removed ${data.databaseReferencesRemoved} database references. Folder removed: ${currentPath}`,
-      });
-
-      // Go back to parent folder after deletion
-      handleGoBack();
-    } catch (error: any) {
-      console.error("Delete folder error:", error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete folder",
-        variant: "destructive",
-      });
-    } finally {
-      setIsDeletingFolder(false);
     }
   };
 
@@ -418,116 +262,12 @@ const Settings = () => {
           <CardContent className="space-y-6">
             <div className="space-y-4">
               <div>
-                <h3 className="text-sm font-medium mb-2">Delete Folder Contents</h3>
+                <h3 className="text-sm font-medium mb-2">Storage File Browser</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Select a storage bucket and folder, then click cleanup to delete all files in that folder 
-                  and remove all database references to those files. This action cannot be undone.
+                  Browse storage files and folders. Select files to delete them manually.
+                  This action cannot be undone.
                 </p>
-                <div className="mb-3">
-                  <Label className="text-sm font-medium mb-2 block">Storage Bucket</Label>
-                  <Select value={selectedBucket} onValueChange={(value: 'client-files' | 'tariff-files') => handleBucketChange(value)}>
-                    <SelectTrigger className="w-full max-w-xs">
-                      <Database className="w-4 h-4 mr-2" />
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="client-files">client-files</SelectItem>
-                      <SelectItem value="tariff-files">tariff-files</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-3">
-                  <div className="w-full max-w-full">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" disabled={isLoadingFolders} className="w-full max-w-full justify-start truncate">
-                          <FolderOpen className="w-4 h-4 mr-2 flex-shrink-0" />
-                          <span className="truncate">{currentPath || "Browse Storage"}</span>
-                          <ChevronDown className="w-4 h-4 ml-2 flex-shrink-0" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent className="w-64 max-h-96 overflow-y-auto bg-background z-50">
-                        <DropdownMenuLabel>
-                          Current: {currentPath || "Root"}
-                        </DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        {currentPath && (
-                          <>
-                            <DropdownMenuItem onSelect={(e) => {
-                              e.preventDefault();
-                              handleGoBack();
-                            }}>
-                              <ChevronDown className="w-4 h-4 mr-2 rotate-90" />
-                              Go Back
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                          </>
-                        )}
-                        {isLoadingFolders ? (
-                          <DropdownMenuItem disabled>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Loading folders...
-                          </DropdownMenuItem>
-                        ) : folders.length === 0 ? (
-                          <DropdownMenuItem disabled>
-                            No subfolders found
-                          </DropdownMenuItem>
-                        ) : (
-                          folders.map((folder) => (
-                            <DropdownMenuItem
-                              key={folder.path}
-                              onSelect={(e) => {
-                                e.preventDefault();
-                                handleFolderClick(folder.path);
-                              }}
-                            >
-                              <FolderOpen className="w-4 h-4 mr-2" />
-                              {folder.name}
-                            </DropdownMenuItem>
-                          ))
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={handleCleanupSnippets}
-                      disabled={isCleaningUp || isDeletingFolder || !currentPath}
-                      variant="destructive"
-                    >
-                      {isCleaningUp ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Deleting...
-                        </>
-                      ) : (
-                        <>
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Delete Folder Contents
-                        </>
-                      )}
-                    </Button>
-
-                    <Button
-                      onClick={handleDeleteFolder}
-                      disabled={isCleaningUp || isDeletingFolder || !currentPath}
-                      variant="destructive"
-                    >
-                      {isDeletingFolder ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Deleting...
-                        </>
-                      ) : (
-                        <>
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Delete Folder
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
+                <StorageFileBrowser />
               </div>
             </div>
           </CardContent>
