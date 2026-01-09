@@ -1163,12 +1163,10 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           const contentHeight = pageHeight - topMargin - bottomMargin;
           const halfPageHeight = contentHeight / 2;
           
-          // Much larger charts - maximize the available half-page space
-          const chartSpacing = 4;
-          const chartWidth = (contentWidth - (chartSpacing * 2)) / 3;
-          // Use most of the half-page height for charts (leaving room for title and details)
-          const availableChartHeight = halfPageHeight - 45; // Reserve space for title (~12) and details (~33)
-          const chartHeight = Math.min(availableChartHeight, chartWidth * 1.2); // Taller aspect ratio
+          // 2x2 grid layout: 2 charts per row, with details in bottom-right
+          const chartSpacing = 6;
+          const chartWidth = (contentWidth - chartSpacing) / 2;
+          const chartHeight = chartWidth * 0.55; // Aspect ratio for 2-column layout
           
           let tariffCountOnPage = 0;
           const tariffsPerPage = 2;
@@ -1190,7 +1188,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             
             // Calculate fixed yPos based on which half of the page
             const tariffStartY = topMargin + (tariffCountOnPage * halfPageHeight);
-            yPos = tariffStartY;
+            // Add offset for section heading on first tariff to prevent overlap
+            yPos = tariffCountOnPage === 0 ? tariffStartY + 18 : tariffStartY;
             
             // Add horizontal separator before second tariff
             if (tariffCountOnPage === 1) {
@@ -1201,55 +1200,85 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             // Add tariff subheading
             addSubsectionHeading(tariffName);
             
-            // Render 3 charts horizontally (compact) - supports both SVG and PNG
+            // Helper to add chart (handles both SVG and PNG)
+            const addChartToPdf = async (chartData: any, x: number, chartY: number, width: number, height: number): Promise<boolean> => {
+              if (!chartData) return false;
+              
+              try {
+                if (chartData.type === 'svg') {
+                  // Parse SVG and embed using svg2pdf
+                  const parser = new DOMParser();
+                  const svgDoc = parser.parseFromString(chartData.content, 'image/svg+xml');
+                  const svgElement = svgDoc.documentElement;
+                  
+                  // Check for parse errors
+                  const parseError = svgDoc.querySelector('parsererror');
+                  if (parseError) {
+                    console.error("SVG parse error:", parseError.textContent);
+                    return false;
+                  }
+                  
+                  await svg2pdf(svgElement, pdf, { x, y: chartY, width, height });
+                  return true;
+                } else if (chartData.type === 'png' || typeof chartData === 'string') {
+                  // Legacy PNG support (chartData is base64 string or has content property)
+                  const imgData = typeof chartData === 'string' ? chartData : chartData.content;
+                  pdf.addImage(imgData, 'PNG', x, chartY, width, height);
+                  return true;
+                }
+              } catch (err) {
+                console.error("Error adding chart:", err);
+              }
+              return false;
+            };
+            
+            // Render 2x2 grid: Top row = 2 charts, Bottom row = 1 chart + details
             if (charts && (charts.basic || charts.energy || charts.demand)) {
               const chart1X = leftMargin;
               const chart2X = leftMargin + chartWidth + chartSpacing;
-              const chart3X = leftMargin + (2 * chartWidth) + (2 * chartSpacing);
+              const topRowY = yPos;
+              const bottomRowY = yPos + chartHeight + 4;
               
-              let chartsRendered = false;
+              // Top row: Basic Charge (left) and Energy Charge (right)
+              await addChartToPdf(charts.basic, chart1X, topRowY, chartWidth, chartHeight);
+              await addChartToPdf(charts.energy, chart2X, topRowY, chartWidth, chartHeight);
               
-              // Helper to add chart (handles both SVG and PNG)
-              const addChartToPdf = async (chartData: any, x: number): Promise<boolean> => {
-                if (!chartData) return false;
+              // Bottom row: Demand Charge (left)
+              await addChartToPdf(charts.demand, chart1X, bottomRowY, chartWidth, chartHeight);
+              
+              // Bottom row: Tariff Details (right) - in same cell as would be 4th chart
+              if (latestPeriod) {
+                const detailsX = chart2X;
+                const detailsY = bottomRowY + 2;
+                const detailsWidth = chartWidth;
                 
-                try {
-                  if (chartData.type === 'svg') {
-                    // Parse SVG and embed using svg2pdf
-                    const parser = new DOMParser();
-                    const svgDoc = parser.parseFromString(chartData.content, 'image/svg+xml');
-                    const svgElement = svgDoc.documentElement;
-                    
-                    // Check for parse errors
-                    const parseError = svgDoc.querySelector('parsererror');
-                    if (parseError) {
-                      console.error("SVG parse error:", parseError.textContent);
-                      return false;
-                    }
-                    
-                    await svg2pdf(svgElement, pdf, { x, y: yPos, width: chartWidth, height: chartHeight });
-                    return true;
-                  } else if (chartData.type === 'png' || typeof chartData === 'string') {
-                    // Legacy PNG support (chartData is base64 string or has content property)
-                    const imgData = typeof chartData === 'string' ? chartData : chartData.content;
-                    pdf.addImage(imgData, 'PNG', x, yPos, chartWidth, chartHeight);
-                    return true;
-                  }
-                } catch (err) {
-                  console.error("Error adding chart:", err);
-                }
-                return false;
-              };
-              
-              // Add charts (await for SVG support)
-              if (await addChartToPdf(charts.basic, chart1X)) chartsRendered = true;
-              if (await addChartToPdf(charts.energy, chart2X)) chartsRendered = true;
-              if (await addChartToPdf(charts.demand, chart3X)) chartsRendered = true;
-              
-              // Only advance yPos if charts were rendered
-              if (chartsRendered) {
-                yPos += chartHeight + 6;
+                // Tariff Overview heading
+                pdf.setFontSize(9);
+                pdf.setFont("helvetica", "bold");
+                pdf.text("Tariff Overview", detailsX, detailsY);
+                
+                pdf.setFontSize(8);
+                pdf.setFont("helvetica", "normal");
+                const overviewY = detailsY + 5;
+                pdf.text(`Type: ${formatTariffType(latestPeriod.tariff_type || 'N/A')} / ${latestPeriod.meter_configuration || 'N/A'}`, detailsX, overviewY);
+                pdf.text(`Voltage: ${latestPeriod.voltage_level || 'N/A'} / Zone: ${latestPeriod.transmission_zone || 'N/A'}`, detailsX, overviewY + 4);
+                pdf.text(`Period: ${format(new Date(latestPeriod.effective_from), "dd MMM yy")} - ${latestPeriod.effective_to ? format(new Date(latestPeriod.effective_to), "dd MMM yy") : 'Current'}`, detailsX, overviewY + 8);
+                
+                // Current Charges heading
+                const chargesY = overviewY + 16;
+                pdf.setFont("helvetica", "bold");
+                pdf.text("Current Charges", detailsX, chargesY);
+                pdf.setFont("helvetica", "normal");
+                
+                const charges = latestPeriod.tariff_charges || [];
+                charges.slice(0, 6).forEach((charge: any, idx: number) => {
+                  const chargeText = `${formatChargeType(charge.charge_type)}: ${formatNumber(charge.charge_amount)} ${charge.unit}`;
+                  pdf.text(chargeText.substring(0, 55), detailsX, chargesY + 4 + (idx * 4));
+                });
               }
+              
+              // Advance yPos past the 2x2 grid
+              yPos = bottomRowY + chartHeight + 4;
             } else {
               // No charts available - add text placeholder
               pdf.setFontSize(8);
@@ -1259,43 +1288,19 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               pdf.setTextColor(0, 0, 0);
               pdf.setFont("helvetica", "normal");
               yPos += 10;
-            }
-            
-            // Render tariff details tables side by side
-            if (latestPeriod) {
-              const tableWidth = (contentWidth - 10) / 2;
-              const startX = leftMargin;
               
-              // Overview table on left
-              pdf.setFontSize(9);
-              pdf.setFont("helvetica", "bold");
-              pdf.text("Tariff Overview", startX, yPos);
-              yPos += 4;
-              
-              pdf.setFontSize(8);
-              pdf.setFont("helvetica", "normal");
-              const overviewData = [
-                [`Type: ${formatTariffType(latestPeriod.tariff_type || 'N/A')} / ${latestPeriod.meter_configuration || 'N/A'}`],
-                [`Voltage: ${latestPeriod.voltage_level || 'N/A'} / Zone: ${latestPeriod.transmission_zone || 'N/A'}`],
-                [`Period: ${format(new Date(latestPeriod.effective_from), "dd MMM yy")} - ${latestPeriod.effective_to ? format(new Date(latestPeriod.effective_to), "dd MMM yy") : 'Current'}`],
-              ];
-              
-              overviewData.forEach((row, idx) => {
-                pdf.text(row[0], startX, yPos + (idx * 4));
-              });
-              
-              // Charges on right side
-              const charges = latestPeriod.tariff_charges || [];
-              if (charges.length > 0) {
-                const chargesX = startX + tableWidth + 10;
+              // Still render tariff details if available
+              if (latestPeriod) {
+                pdf.setFontSize(9);
                 pdf.setFont("helvetica", "bold");
-                pdf.text("Current Charges", chargesX, yPos - 4);
-                pdf.setFont("helvetica", "normal");
+                pdf.text("Tariff Overview", leftMargin, yPos);
+                yPos += 5;
                 
-                charges.slice(0, 5).forEach((charge: any, idx: number) => {
-                  const chargeText = `${formatChargeType(charge.charge_type)}: ${formatNumber(charge.charge_amount)} ${charge.unit}`;
-                  pdf.text(chargeText.substring(0, 50), chargesX, yPos + (idx * 4));
-                });
+                pdf.setFontSize(8);
+                pdf.setFont("helvetica", "normal");
+                pdf.text(`Type: ${formatTariffType(latestPeriod.tariff_type || 'N/A')} / ${latestPeriod.meter_configuration || 'N/A'}`, leftMargin, yPos);
+                pdf.text(`Voltage: ${latestPeriod.voltage_level || 'N/A'} / Zone: ${latestPeriod.transmission_zone || 'N/A'}`, leftMargin, yPos + 4);
+                yPos += 12;
               }
             }
             
