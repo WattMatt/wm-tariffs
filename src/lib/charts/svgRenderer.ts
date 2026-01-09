@@ -716,9 +716,9 @@ export function generateAssignmentChartSVG(
 ): string {
   if (data.length === 0) return '';
 
-  // Colors matching ChartGenerator.ts document vs assigned pattern
-  const documentColor = '#3b82f6';  // Blue for Document
-  const assignedColor = '#f97316';  // Orange for Assigned
+  // Colors matching reconciliation charts pattern (gray + blue)
+  const documentColor = '#3b82f6';  // Blue for Document Rate
+  const assignedColor = 'rgba(156, 163, 175, 0.5)';  // Gray for Assigned Rate
 
   // Chart dimensions
   const padding = 60;
