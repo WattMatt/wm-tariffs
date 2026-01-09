@@ -24,7 +24,7 @@ import { format } from "date-fns";
 import { cn, formatDateString, formatDateStringToLong, formatDateStringToMonthYear, getMonthFromDateString, daysBetweenDateStrings, extractDateFromTimestamp } from "@/lib/utils";
 import { calculateMeterCost } from "@/lib/costCalculation";
 import html2canvas from "html2canvas";
-import { saveChartToStorage, CHART_METRICS, ChartMetricKey, ChartType } from "@/lib/reconciliation/chartGeneration";
+import { saveChartToStorage, CHART_METRICS, ASSIGNMENT_METRICS, ChartMetricKey, ChartType } from "@/lib/reconciliation/chartGeneration";
 import { sanitizeName } from "@/lib/storagePaths";
 import BackgroundChartCapture, { CaptureLogEntry, MeterCaptureResult } from "./BackgroundChartCapture";
 import Celebration from "@/components/ui/celebration";
@@ -164,6 +164,17 @@ export default function TariffAssignmentTab({
   const [captureLog, setCaptureLog] = useState<CaptureLogEntry[]>([]);
   const [showCaptureLog, setShowCaptureLog] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+  
+  // Assignment chart capture state
+  const [assignmentChartsDialogOpen, setAssignmentChartsDialogOpen] = useState(false);
+  const [assignmentCaptureQueue, setAssignmentCaptureQueue] = useState<Array<{
+    meter: Meter;
+    docs: DocumentShopNumber[];
+    metric: ChartMetricKey;
+    metricInfo: typeof ASSIGNMENT_METRICS[number];
+  }>>([]);
+  const [isAssignmentCapturing, setIsAssignmentCapturing] = useState(false);
+  const [assignmentCaptureChartType] = useState<ChartType>('assignment');
 
   // Handle legend click to toggle data series
   const handleLegendClick = (dataKey: string) => {
