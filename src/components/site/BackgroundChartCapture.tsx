@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useRef } from "react";
-import { CHART_METRICS, ASSIGNMENT_METRICS, ChartMetricKey, generateChartPath, ChartType } from "@/lib/reconciliation/chartGeneration";
+import { CHART_METRICS, ASSIGNMENT_METRICS, ChartMetricKey, AssignmentMetricKey, generateChartPath, ChartType } from "@/lib/reconciliation/chartGeneration";
 import { generateReconciliationMeterChartSVG, generateAnalysisMeterChartSVG, generateAssignmentChartSVG } from "@/lib/charts/svgRenderer";
 import type { ReconciliationChartDataPoint, AnalysisChartDataPoint } from "./ChartGenerator";
 import { supabase } from "@/integrations/supabase/client";
@@ -47,12 +47,12 @@ interface Meter {
   rating: string | null;
 }
 
-// Queue item from parent component
-interface CaptureQueueItem {
+// Queue item from parent component - supports both analysis and assignment metrics
+export interface CaptureQueueItem {
   meter: Meter;
   docs: DocumentShopNumber[];
-  metric: ChartMetricKey;
-  metricInfo: typeof CHART_METRICS[number];
+  metric: ChartMetricKey | AssignmentMetricKey;
+  metricInfo: typeof CHART_METRICS[number] | typeof ASSIGNMENT_METRICS[number];
 }
 
 // Legacy log entry format for backwards compatibility
@@ -91,8 +91,8 @@ interface BackgroundChartCaptureProps {
   onPauseStateChange?: (isPaused: boolean) => void;
   onLogUpdate?: (log: CaptureLogEntry[]) => void;
   onMeterComplete?: (result: MeterCaptureResult) => void;
-  cancelRef: React.MutableRefObject<boolean>;
-  pauseRef: React.MutableRefObject<boolean>;
+  cancelRef?: React.MutableRefObject<boolean>;
+  pauseRef?: React.MutableRefObject<boolean>;
   isActive: boolean;
 }
 
@@ -610,14 +610,19 @@ export default function BackgroundChartCapture({
   onPauseStateChange,
   onLogUpdate,
   onMeterComplete,
-  cancelRef,
-  pauseRef,
+  cancelRef: externalCancelRef,
+  pauseRef: externalPauseRef,
   isActive,
 }: BackgroundChartCaptureProps) {
   const hasStartedRef = useRef(false);
   const docsMapRef = useRef<Map<string, DocumentShopNumber[]>>(new Map());
   const globalPeriodsRef = useRef<string[]>([]);
   
+  // Internal fallback refs when external refs are not provided
+  const internalCancelRef = useRef(false);
+  const internalPauseRef = useRef(false);
+  const cancelRef = externalCancelRef || internalCancelRef;
+  const pauseRef = externalPauseRef || internalPauseRef;
   // Keep globalPeriods in a ref for use in callbacks
   useEffect(() => {
     globalPeriodsRef.current = globalPeriods || [];

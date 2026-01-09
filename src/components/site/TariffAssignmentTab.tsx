@@ -24,7 +24,7 @@ import { format } from "date-fns";
 import { cn, formatDateString, formatDateStringToLong, formatDateStringToMonthYear, getMonthFromDateString, daysBetweenDateStrings, extractDateFromTimestamp } from "@/lib/utils";
 import { calculateMeterCost } from "@/lib/costCalculation";
 import html2canvas from "html2canvas";
-import { saveChartToStorage, CHART_METRICS, ASSIGNMENT_METRICS, ChartMetricKey, ChartType } from "@/lib/reconciliation/chartGeneration";
+import { saveChartToStorage, CHART_METRICS, ASSIGNMENT_METRICS, ChartMetricKey, AssignmentMetricKey, ChartType } from "@/lib/reconciliation/chartGeneration";
 import { sanitizeName } from "@/lib/storagePaths";
 import BackgroundChartCapture, { CaptureLogEntry, MeterCaptureResult } from "./BackgroundChartCapture";
 import Celebration from "@/components/ui/celebration";
@@ -170,7 +170,7 @@ export default function TariffAssignmentTab({
   const [assignmentCaptureQueue, setAssignmentCaptureQueue] = useState<Array<{
     meter: Meter;
     docs: DocumentShopNumber[];
-    metric: ChartMetricKey;
+    metric: AssignmentMetricKey;
     metricInfo: typeof ASSIGNMENT_METRICS[number];
   }>>([]);
   const [isAssignmentCapturing, setIsAssignmentCapturing] = useState(false);
@@ -1426,6 +1426,72 @@ export default function TariffAssignmentTab({
       failedMetrics: result.failedMetrics,
     }));
   }, [meterCaptureResults]);
+
+  // Start assignment chart capture (rate comparison charts)
+  const startAssignmentChartCapture = () => {
+    // Get all meters that have document data
+    const metersWithDocs = meters
+      .map(meter => ({
+        meter,
+        docs: getMatchingShopNumbers(meter)
+      }))
+      .filter(m => m.docs.length > 0);
+    
+    if (metersWithDocs.length === 0) {
+      toast.error('No meters with document data to capture');
+      return;
+    }
+
+    // Build the capture queue using ASSIGNMENT_METRICS
+    const queue: typeof assignmentCaptureQueue = [];
+    
+    for (const { meter, docs } of metersWithDocs) {
+      for (const metricInfo of ASSIGNMENT_METRICS) {
+        queue.push({
+          meter,
+          docs,
+          metric: metricInfo.key,
+          metricInfo,
+        });
+      }
+    }
+    
+    if (queue.length === 0) {
+      toast.error('No charts to capture');
+      return;
+    }
+    
+    // Start background capture
+    setAssignmentCaptureQueue(queue);
+    setIsAssignmentCapturing(true);
+    
+    toast.info(`Starting rate comparison chart capture for ${metersWithDocs.length} meters (${queue.length} charts)`);
+  };
+
+  // Assignment chart capture progress handler
+  const handleAssignmentCaptureProgress = (metersComplete: number, totalMeters: number, chartsComplete: number, totalCharts: number) => {
+    const progress = Math.round((chartsComplete / totalCharts) * 100);
+    toast.loading(`Capturing rate comparison charts: ${chartsComplete}/${totalCharts} (${progress}%)`, {
+      id: 'assignment-capture-progress',
+    });
+  };
+
+  // Assignment chart capture complete handler
+  const handleAssignmentCaptureComplete = (success: number, failed: number, cancelled: boolean) => {
+    setIsAssignmentCapturing(false);
+    setAssignmentCaptureQueue([]);
+    
+    toast.dismiss('assignment-capture-progress');
+    
+    if (cancelled) {
+      toast.info(`Rate comparison chart capture cancelled. ${success} charts saved.`);
+    } else if (failed === 0) {
+      toast.success(`Rate comparison charts captured successfully! ${success} charts saved.`);
+      setShowCelebration(true);
+    } else {
+      toast.warning(`Rate comparison charts captured with ${failed} failures. ${success} charts saved.`);
+    }
+  };
 
   // Load calculated costs from database
   const calculateAllCosts = async () => {
@@ -3132,28 +3198,47 @@ export default function TariffAssignmentTab({
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold">Meter Tariff Assignments</h3>
-                    <Button 
-                      onClick={isCalculating ? handleCancelCalculations : handleSaveAssignments} 
-                      disabled={isSaving || isCalculating}
-                      variant={isCalculating ? "destructive" : "default"}
-                    >
-                      {isCalculating ? (
-                        <>
-                          <X className="w-4 h-4 mr-2" />
-                          Calculating Bill Costs: {calculationProgress.current}/{calculationProgress.total} (Click to Cancel)
-                        </>
-                      ) : isSaving ? (
-                        <>
-                          <FileCheck2 className="w-4 h-4 mr-2" />
-                          Saving...
-                        </>
-                      ) : (
-                        <>
-                          <FileCheck2 className="w-4 h-4 mr-2" />
-                          Save Assignments
-                        </>
-                      )}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        onClick={startAssignmentChartCapture}
+                        disabled={isAssignmentCapturing || meters.length === 0}
+                        variant="outline"
+                      >
+                        {isAssignmentCapturing ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Capturing...
+                          </>
+                        ) : (
+                          <>
+                            <Camera className="w-4 h-4 mr-2" />
+                            Capture Rate Comparison Charts
+                          </>
+                        )}
+                      </Button>
+                      <Button 
+                        onClick={isCalculating ? handleCancelCalculations : handleSaveAssignments} 
+                        disabled={isSaving || isCalculating}
+                        variant={isCalculating ? "destructive" : "default"}
+                      >
+                        {isCalculating ? (
+                          <>
+                            <X className="w-4 h-4 mr-2" />
+                            Calculating Bill Costs: {calculationProgress.current}/{calculationProgress.total} (Click to Cancel)
+                          </>
+                        ) : isSaving ? (
+                          <>
+                            <FileCheck2 className="w-4 h-4 mr-2" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <FileCheck2 className="w-4 h-4 mr-2" />
+                            Save Assignments
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
 
                   {selectedMeterIds.size > 0 && (
@@ -4745,6 +4830,17 @@ export default function TariffAssignmentTab({
         pauseRef={pauseBulkCaptureRef}
         isActive={isBackgroundCapturing}
         onLogUpdate={setCaptureLog}
+      />
+
+      {/* Background Chart Capture for Assignment/Rate Comparison Charts */}
+      <BackgroundChartCapture
+        siteId={siteId}
+        queue={assignmentCaptureQueue}
+        chartType="assignment"
+        globalPeriods={globalPeriods}
+        onBatchProgress={handleAssignmentCaptureProgress}
+        onComplete={handleAssignmentCaptureComplete}
+        isActive={isAssignmentCapturing}
       />
 
       {/* Capture Log Dialog */}
