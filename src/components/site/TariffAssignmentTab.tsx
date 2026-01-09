@@ -2750,24 +2750,27 @@ export default function TariffAssignmentTab({
                 }
               </CardDescription>
             </div>
-            {showDocumentCharts && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setChartsDialogOpen(true)}
-                    >
-                      <Eye className="w-4 h-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{hideSeasonalAverages ? 'View Reconciliation Charts' : 'View Analysis Charts'}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => showDocumentCharts ? setChartsDialogOpen(true) : setAssignmentChartsDialogOpen(true)}
+                  >
+                    <Eye className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>
+                    {showDocumentCharts 
+                      ? (hideSeasonalAverages ? 'View Reconciliation Charts' : 'View Analysis Charts')
+                      : 'View Rate Comparison Charts'
+                    }
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -3196,50 +3199,33 @@ export default function TariffAssignmentTab({
               );
               })() : (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold">Meter Tariff Assignments</h3>
-                    <div className="flex items-center gap-2">
-                      <Button 
-                        onClick={startAssignmentChartCapture}
-                        disabled={isAssignmentCapturing || meters.length === 0}
-                        variant="outline"
-                      >
-                        {isAssignmentCapturing ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Capturing...
-                          </>
-                        ) : (
-                          <>
-                            <Camera className="w-4 h-4 mr-2" />
-                            Capture Rate Comparison Charts
-                          </>
-                        )}
-                      </Button>
-                      <Button 
-                        onClick={isCalculating ? handleCancelCalculations : handleSaveAssignments} 
-                        disabled={isSaving || isCalculating}
-                        variant={isCalculating ? "destructive" : "default"}
-                      >
-                        {isCalculating ? (
-                          <>
-                            <X className="w-4 h-4 mr-2" />
-                            Calculating Bill Costs: {calculationProgress.current}/{calculationProgress.total} (Click to Cancel)
-                          </>
-                        ) : isSaving ? (
-                          <>
-                            <FileCheck2 className="w-4 h-4 mr-2" />
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            <FileCheck2 className="w-4 h-4 mr-2" />
-                            Save Assignments
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
+                    <div className="flex items-center justify-between">
+                     <h3 className="text-lg font-semibold">Meter Tariff Assignments</h3>
+                     <div className="flex items-center gap-2">
+                       <Button 
+                         onClick={isCalculating ? handleCancelCalculations : handleSaveAssignments} 
+                         disabled={isSaving || isCalculating}
+                         variant={isCalculating ? "destructive" : "default"}
+                       >
+                         {isCalculating ? (
+                           <>
+                             <X className="w-4 h-4 mr-2" />
+                             Calculating Bill Costs: {calculationProgress.current}/{calculationProgress.total} (Click to Cancel)
+                           </>
+                         ) : isSaving ? (
+                           <>
+                             <FileCheck2 className="w-4 h-4 mr-2" />
+                             Saving...
+                           </>
+                         ) : (
+                           <>
+                             <FileCheck2 className="w-4 h-4 mr-2" />
+                             Save Assignments
+                           </>
+                         )}
+                       </Button>
+                     </div>
+                   </div>
 
                   {selectedMeterIds.size > 0 && (
                     <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/50">
