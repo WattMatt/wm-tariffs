@@ -4802,6 +4802,24 @@ export default function TariffAssignmentTab({
         meterCaptureStatuses={meterCaptureStatuses}
       />
 
+      {/* Assignment/Rate Comparison Charts Dialog */}
+      <ReconciliationChartsDialog
+        siteId={siteId}
+        open={assignmentChartsDialogOpen}
+        onOpenChange={setAssignmentChartsDialogOpen}
+        chartType="assignment"
+        onBulkCapture={startAssignmentChartCapture}
+        onCancelBulkCapture={() => {
+          // Cancel assignment capture
+          setIsAssignmentCapturing(false);
+          setAssignmentCaptureQueue([]);
+        }}
+        isBulkCapturing={isAssignmentCapturing}
+        bulkCaptureProgress={null}
+        isBackgroundCapturing={isAssignmentCapturing}
+        meterCaptureStatuses={[]}
+      />
+
       {/* Background Chart Capture (renders off-screen) */}
       <BackgroundChartCapture
         siteId={siteId}
