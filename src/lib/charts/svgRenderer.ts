@@ -694,3 +694,125 @@ export function generateAnalysisMeterChartSVG(
   svg += '</svg>';
   return svg;
 }
+
+// ==================== Assignment Chart SVG (Document vs Assigned Rate Comparison) ====================
+
+export interface AssignmentChartDataPointSVG {
+  period: string;
+  documentValue: number | null;
+  assignedValue: number | null;
+}
+
+/**
+ * Generate an assignment rate comparison chart as SVG
+ * Compares document rates vs assigned tariff rates
+ */
+export function generateAssignmentChartSVG(
+  title: string,
+  unit: string,
+  data: AssignmentChartDataPointSVG[],
+  width: number = 900,
+  height: number = 500
+): string {
+  if (data.length === 0) return '';
+
+  // Colors matching ChartGenerator.ts document vs assigned pattern
+  const documentColor = '#3b82f6';  // Blue for Document
+  const assignedColor = '#f97316';  // Orange for Assigned
+
+  // Chart dimensions
+  const padding = 60;
+  const rightPadding = 60;
+  const bottomPadding = 100;
+  const topPadding = 70;
+  const chartWidth = width - padding - rightPadding;
+  const chartHeight = height - topPadding - bottomPadding;
+
+  // Find max value
+  const allValues = data.flatMap(d => [d.documentValue || 0, d.assignedValue || 0]);
+  const maxValue = Math.max(...allValues, 1);
+
+  const clusterWidth = chartWidth / data.length;
+  const barWidth = Math.max((clusterWidth - 12) / 2, 20);
+
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`;
+  
+  // Background
+  svg += `<rect width="${width}" height="${height}" fill="#ffffff"/>`;
+
+  // Title
+  svg += `<text x="${width / 2}" y="25" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="#000000">${escapeXml(title)}</text>`;
+  if (unit) {
+    svg += `<text x="${width / 2}" y="42" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#000000">(${escapeXml(unit)})</text>`;
+  }
+
+  // Legend
+  const legendY = 55;
+  const legendSpacing = 120;
+  let legendX = width / 2 - legendSpacing;
+
+  svg += `<rect x="${legendX}" y="${legendY}" width="14" height="14" fill="${documentColor}"/>`;
+  svg += `<text x="${legendX + 18}" y="${legendY + 11}" font-family="sans-serif" font-size="10" fill="#000000">Document Rate</text>`;
+
+  legendX += legendSpacing;
+  svg += `<rect x="${legendX}" y="${legendY}" width="14" height="14" fill="${assignedColor}"/>`;
+  svg += `<text x="${legendX + 18}" y="${legendY + 11}" font-family="sans-serif" font-size="10" fill="#000000">Assigned Rate</text>`;
+
+  // Gridlines
+  const numGridLines = 5;
+  for (let i = 0; i <= numGridLines; i++) {
+    const y = topPadding + (chartHeight * i / numGridLines);
+    svg += `<line x1="${padding}" y1="${y}" x2="${padding + chartWidth}" y2="${y}" stroke="#e5e7eb" stroke-dasharray="3,3"/>`;
+  }
+
+  // Bars
+  data.forEach((item, index) => {
+    const clusterX = padding + index * clusterWidth;
+    const barRadius = 4;
+    
+    // Document bar (left)
+    const docValue = item.documentValue || 0;
+    const docBarHeight = maxValue > 0 ? (docValue / maxValue) * chartHeight : 0;
+    const docY = topPadding + chartHeight - docBarHeight;
+    const docBarX = clusterX + 4;
+    
+    if (docBarHeight > 0) {
+      svg += `<path d="M${docBarX},${docY + barRadius} Q${docBarX},${docY} ${docBarX + barRadius},${docY} L${docBarX + barWidth - barRadius},${docY} Q${docBarX + barWidth},${docY} ${docBarX + barWidth},${docY + barRadius} L${docBarX + barWidth},${topPadding + chartHeight} L${docBarX},${topPadding + chartHeight} Z" fill="${documentColor}"/>`;
+      // Value on top
+      svg += `<text x="${docBarX + barWidth / 2}" y="${docY - 4}" text-anchor="middle" font-family="sans-serif" font-size="9" font-weight="bold" fill="#000000">${abbreviateNumber(docValue)}</text>`;
+    }
+    
+    // Assigned bar (right)
+    const assignedValue = item.assignedValue || 0;
+    const assignedBarHeight = maxValue > 0 ? (assignedValue / maxValue) * chartHeight : 0;
+    const assignedY = topPadding + chartHeight - assignedBarHeight;
+    const assignedBarX = clusterX + barWidth + 8;
+    
+    if (assignedBarHeight > 0) {
+      svg += `<path d="M${assignedBarX},${assignedY + barRadius} Q${assignedBarX},${assignedY} ${assignedBarX + barRadius},${assignedY} L${assignedBarX + barWidth - barRadius},${assignedY} Q${assignedBarX + barWidth},${assignedY} ${assignedBarX + barWidth},${assignedY + barRadius} L${assignedBarX + barWidth},${topPadding + chartHeight} L${assignedBarX},${topPadding + chartHeight} Z" fill="${assignedColor}"/>`;
+      // Value on top
+      svg += `<text x="${assignedBarX + barWidth / 2}" y="${assignedY - 4}" text-anchor="middle" font-family="sans-serif" font-size="9" font-weight="bold" fill="#000000">${abbreviateNumber(assignedValue)}</text>`;
+    }
+  });
+
+  // Y-axis labels (left)
+  for (let i = 0; i <= numGridLines; i++) {
+    const value = maxValue * (1 - i / numGridLines);
+    const y = topPadding + (chartHeight * i / numGridLines);
+    svg += `<text x="${padding - 8}" y="${y + 4}" text-anchor="end" font-family="sans-serif" font-size="10" fill="#374151">${abbreviateNumber(value)}</text>`;
+  }
+
+  // X-axis labels (rotated)
+  data.forEach((item, index) => {
+    const x = padding + index * clusterWidth + clusterWidth / 2;
+    const y = topPadding + chartHeight + 15;
+    svg += `<text x="${x}" y="${y}" text-anchor="end" font-family="sans-serif" font-size="9" fill="#374151" transform="rotate(-45 ${x} ${y})">${escapeXml(item.period)}</text>`;
+  });
+
+  // Axes
+  svg += `<line x1="${padding}" y1="${topPadding}" x2="${padding}" y2="${topPadding + chartHeight}" stroke="#374151"/>`;
+  svg += `<line x1="${padding}" y1="${topPadding + chartHeight}" x2="${padding + chartWidth}" y2="${topPadding + chartHeight}" stroke="#374151"/>`;
+
+  svg += '</svg>';
+  return svg;
+}

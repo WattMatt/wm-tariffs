@@ -31,7 +31,7 @@ interface BulkCaptureProgress {
 }
 
 // Chart type determines storage path
-export type ChartDialogType = 'analysis' | 'comparison';
+export type ChartDialogType = 'analysis' | 'comparison' | 'assignment';
 
 interface ReconciliationChartsDialogProps {
   siteId: string;
@@ -85,6 +85,7 @@ const sanitizeName = (name: string): string => {
 const CHART_STORAGE_PATHS = {
   analysis: 'Reconciliations/Graphs/Analysis',
   comparison: 'Reconciliations/Graphs/Comparison',
+  assignment: 'Reconciliations/Graphs/Assignment',
 } as const;
 
 export default function ReconciliationChartsDialog({ 
@@ -441,7 +442,7 @@ export default function ReconciliationChartsDialog({
             <div>
               <DialogTitle className="flex items-center gap-2">
                 <ImageIcon className="w-5 h-5" />
-                {chartType === 'analysis' ? 'Analysis Charts' : 'Reconciliation Charts'}
+                {chartType === 'analysis' ? 'Analysis Charts' : chartType === 'assignment' ? 'Rate Comparison Charts' : 'Reconciliation Charts'}
               </DialogTitle>
             </div>
             <div className="flex items-center gap-2 flex-nowrap shrink-0">

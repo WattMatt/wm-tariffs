@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback, useRef } from "react";
-import { CHART_METRICS, ChartMetricKey, generateChartPath, ChartType } from "@/lib/reconciliation/chartGeneration";
-import { generateReconciliationMeterChartSVG, generateAnalysisMeterChartSVG } from "@/lib/charts/svgRenderer";
+import { CHART_METRICS, ASSIGNMENT_METRICS, ChartMetricKey, generateChartPath, ChartType } from "@/lib/reconciliation/chartGeneration";
+import { generateReconciliationMeterChartSVG, generateAnalysisMeterChartSVG, generateAssignmentChartSVG } from "@/lib/charts/svgRenderer";
 import type { ReconciliationChartDataPoint, AnalysisChartDataPoint } from "./ChartGenerator";
 import { supabase } from "@/integrations/supabase/client";
 import { useBackgroundChartCapture, type CaptureItem } from "@/hooks/useBackgroundChartCapture";
@@ -391,6 +391,164 @@ const prepareAnalysisChartData = async (
   return normalizeToGlobalPeriods(chartData, globalPeriods);
 };
 
+// ============ Assignment Chart Data Preparation ============
+
+interface AssignmentChartDataPoint {
+  period: string;
+  documentValue: number | null;
+  assignedValue: number | null;
+}
+
+// Helper to get season from date string
+const getSeasonFromDateString = (dateString: string): 'high' | 'low' => {
+  const [, month] = dateString.split('-');
+  const monthNum = parseInt(month);
+  // High season (winter) = June-August (6-8), Low season (summer) = rest
+  return (monthNum >= 6 && monthNum <= 8) ? 'high' : 'low';
+};
+
+// Prepare assignment chart data - compares document rates vs assigned tariff rates
+const prepareAssignmentChartData = async (
+  meterId: string,
+  docs: DocumentShopNumber[], 
+  metric: string,
+  globalPeriods?: string[]
+): Promise<AssignmentChartDataPoint[]> => {
+  // Fetch meter's assigned tariff info
+  const { data: meter } = await supabase
+    .from('meters')
+    .select('tariff_structure_id, assigned_tariff_name')
+    .eq('id', meterId)
+    .single();
+
+  if (!meter?.tariff_structure_id) {
+    // No tariff assigned, return null assigned values
+    const sortedDocs = [...docs].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
+    return sortedDocs.map(doc => {
+      const periodDate = new Date(doc.periodEnd);
+      return {
+        period: periodDate.toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
+        documentValue: extractDocumentRate(doc, metric),
+        assignedValue: null,
+      };
+    });
+  }
+
+  // Fetch tariff charges
+  const { data: tariffCharges } = await supabase
+    .from('tariff_charges')
+    .select('charge_type, charge_amount, unit, description')
+    .eq('tariff_structure_id', meter.tariff_structure_id);
+
+  // Fetch TOU periods
+  const { data: touPeriods } = await supabase
+    .from('tariff_time_periods')
+    .select('season, period_type, energy_charge_cents')
+    .eq('tariff_structure_id', meter.tariff_structure_id);
+
+  const sortedDocs = [...docs].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
+  
+  const chartData = sortedDocs.map(doc => {
+    const periodDate = new Date(doc.periodEnd);
+    const season = getSeasonFromDateString(doc.periodEnd);
+    
+    const documentRate = extractDocumentRate(doc, metric);
+    const assignedRate = extractAssignedRate(metric, season, tariffCharges || [], touPeriods || []);
+    
+    return {
+      period: periodDate.toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
+      documentValue: documentRate,
+      assignedValue: assignedRate,
+    };
+  });
+  
+  return normalizeToGlobalPeriods(chartData, globalPeriods);
+};
+
+// Extract rate from document line items
+const extractDocumentRate = (doc: DocumentShopNumber, metric: string): number | null => {
+  const lineItems = doc.lineItems || [];
+  
+  switch(metric) {
+    case 'basic-rate': {
+      const basicItem = lineItems.find(item => item.unit === 'Monthly');
+      return basicItem?.amount || null;
+    }
+    case 'energy-rate': {
+      const kwhItem = lineItems.find(item => item.unit === 'kWh' && item.supply === 'Normal');
+      return kwhItem?.rate || null;
+    }
+    case 'demand-rate': {
+      const kvaItem = lineItems.find(item => item.unit === 'kVA');
+      return kvaItem?.rate || null;
+    }
+    default:
+      return null;
+  }
+};
+
+// Extract rate from assigned tariff
+const extractAssignedRate = (
+  metric: string,
+  season: 'high' | 'low',
+  charges: Array<{ charge_type: string; charge_amount: number; unit: string }>,
+  periods: Array<{ season: string; period_type: string; energy_charge_cents: number }>
+): number | null => {
+  switch(metric) {
+    case 'basic-rate': {
+      const basicCharge = charges.find(c => 
+        c.charge_type.toLowerCase().includes('basic') || 
+        c.charge_type.toLowerCase().includes('service')
+      );
+      return basicCharge?.charge_amount || null;
+    }
+    case 'energy-rate': {
+      // Try TOU periods first
+      const seasonStr = season === 'high' ? 'winter' : 'summer';
+      const seasonPeriods = periods.filter(p => 
+        p.season.toLowerCase().includes(seasonStr) ||
+        p.season.toLowerCase().includes(season)
+      );
+      
+      if (seasonPeriods.length > 0) {
+        // Use standard/off-peak as default, or average
+        const standardPeriod = seasonPeriods.find(p => 
+          p.period_type.toLowerCase().includes('standard') || 
+          p.period_type.toLowerCase().includes('off')
+        );
+        const rate = standardPeriod 
+          ? standardPeriod.energy_charge_cents / 100
+          : seasonPeriods.reduce((sum, p) => sum + p.energy_charge_cents, 0) / seasonPeriods.length / 100;
+        return rate;
+      }
+      
+      // Fallback to charges
+      const energyCharge = charges.find(c => 
+        (c.charge_type.toLowerCase().includes('energy') && 
+         c.charge_type.toLowerCase().includes(season)) ||
+        c.charge_type.toLowerCase() === `energy_${season}_season`
+      );
+      if (energyCharge?.unit === 'c/kWh') {
+        return energyCharge.charge_amount / 100;
+      }
+      return energyCharge?.charge_amount || null;
+    }
+    case 'demand-rate': {
+      const demandCharge = charges.find(c => 
+        (c.charge_type.toLowerCase().includes('demand') && 
+         c.charge_type.toLowerCase().includes(season)) ||
+        c.charge_type.toLowerCase() === `demand_${season}_season`
+      );
+      if (demandCharge?.unit === 'c/kVA') {
+        return demandCharge.charge_amount / 100;
+      }
+      return demandCharge?.charge_amount || null;
+    }
+    default:
+      return null;
+  }
+};
+
 // ============ Component ============
 
 // Transform queue to capture items format
@@ -501,6 +659,19 @@ export default function BackgroundChartCapture({
         metric.unit,
         data
       );
+    } else if (chartType === 'assignment') {
+      // Assignment chart: Document Rate vs Assigned Rate comparison
+      const data = await prepareAssignmentChartData(meter.id, typedDocs, metric.key, periods);
+      
+      if (!data || data.length === 0) {
+        throw new Error('No assignment chart data available');
+      }
+      
+      svgContent = generateAssignmentChartSVG(
+        `${meter.meter_number} - ${metric.title}`,
+        metric.unit,
+        data
+      );
     } else {
       // Comparison chart: Reconciliation Cost + Document Billed bars + Meter Reading line
       const data = await prepareChartData(meter.id, typedDocs, metric.key, periods);
@@ -541,7 +712,8 @@ export default function BackgroundChartCapture({
   } = useBackgroundChartCapture<Meter>({
     siteId,
     config: {
-      metrics: CHART_METRICS.map(m => ({ ...m })),
+      // Use assignment metrics for assignment chart type, otherwise use standard chart metrics
+      metrics: (chartType === 'assignment' ? ASSIGNMENT_METRICS : CHART_METRICS).map(m => ({ ...m })),
       storagePathGenerator: async (siteId, itemId, metricFilename) => {
         // Find meter number from results or queue
         const meter = queue.find(q => q.meter.id === itemId)?.meter;
@@ -558,7 +730,7 @@ export default function BackgroundChartCapture({
         prog.totalCharts,
         prog.currentItemLabel,
         prog.currentMetricLabel,
-        `Meter ${prog.currentItem}/${prog.totalItems} - Chart ${(prog.currentChart - 1) % 6 + 1}/6`
+        `Meter ${prog.currentItem}/${prog.totalItems} - Chart ${(prog.currentChart - 1) % (chartType === 'assignment' ? 3 : 6) + 1}/${chartType === 'assignment' ? 3 : 6}`
       );
       // Note: onBatchProgress is now called from onItemComplete for stable progress
     },
@@ -568,8 +740,9 @@ export default function BackgroundChartCapture({
       completedMetersRef.current += 1;
       const completedMeters = completedMetersRef.current;
       const totalMeters = totalMetersRef.current;
-      const totalCharts = totalMeters * CHART_METRICS.length;
-      const completedCharts = completedMeters * CHART_METRICS.length;
+      const metricsCount = chartType === 'assignment' ? ASSIGNMENT_METRICS.length : CHART_METRICS.length;
+      const totalCharts = totalMeters * metricsCount;
+      const completedCharts = completedMeters * metricsCount;
       onBatchProgress?.(completedMeters, totalMeters, completedCharts, totalCharts);
     },
     onLogUpdate: (genericLog) => {
