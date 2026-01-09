@@ -2579,7 +2579,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       if (supplyAuthorityName && supplyAuthorityRegion && uniqueTariffNames.length > 0) {
         const sanitizedProvince = sanitizeForPath(supplyAuthorityRegion);
         const sanitizedMunicipality = sanitizeForPath(supplyAuthorityName);
-        const basePath = `Tariffs/${sanitizedProvince}/${sanitizedMunicipality}`;
+        const basePath = `Graphs/${sanitizedProvince}/${sanitizedMunicipality}`;
 
         // Chart types to fetch (use high season for energy/demand) - now SVG format
         const chartTypes = [
