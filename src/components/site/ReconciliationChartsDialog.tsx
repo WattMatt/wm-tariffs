@@ -62,6 +62,7 @@ interface MeterWithHierarchy {
   order: number;
 }
 
+// Analysis/Comparison metric labels
 const METRIC_LABELS: Record<string, string> = {
   'total': 'Total Amount',
   'basic': 'Basic Charge',
@@ -71,7 +72,21 @@ const METRIC_LABELS: Record<string, string> = {
   'kwh-consumption': 'kWh Consumption',
 };
 
+// Assignment metric labels (rate comparisons)
+const ASSIGNMENT_METRIC_LABELS: Record<string, string> = {
+  'basic-rate': 'Basic Charge Rate',
+  'energy-rate': 'Energy Rate',
+  'demand-rate': 'Demand Rate',
+};
+
+// Combined labels for lookup
+const ALL_METRIC_LABELS: Record<string, string> = {
+  ...METRIC_LABELS,
+  ...ASSIGNMENT_METRIC_LABELS,
+};
+
 const METRIC_ORDER = ['total', 'basic', 'kva-charge', 'kwh-charge', 'kva-consumption', 'kwh-consumption'];
+const ASSIGNMENT_METRIC_ORDER = ['basic-rate', 'energy-rate', 'demand-rate'];
 
 // Sanitize name to match storage path format
 const sanitizeName = (name: string): string => {
@@ -310,6 +325,9 @@ export default function ReconciliationChartsDialog({
       // Filter for SVG files and parse names
       const chartFiles: ChartFile[] = [];
       
+      // Use appropriate metric order based on chart type
+      const currentMetricOrder = chartType === 'assignment' ? ASSIGNMENT_METRIC_ORDER : METRIC_ORDER;
+      
       for (const file of files) {
         if (!file.name.endsWith('.svg')) continue;
         
@@ -321,7 +339,7 @@ export default function ReconciliationChartsDialog({
         let foundMeterNumber = '';
         
         // Check each known metric suffix (try longer ones first)
-        for (const metric of METRIC_ORDER) {
+        for (const metric of currentMetricOrder) {
           const suffix = `-${metric}`;
           if (nameWithoutExt.endsWith(suffix)) {
             foundMetric = metric;
@@ -333,7 +351,7 @@ export default function ReconciliationChartsDialog({
         // Skip if no known metric found
         if (!foundMetric || !foundMeterNumber) continue;
         
-        const metricLabel = METRIC_LABELS[foundMetric] || foundMetric;
+        const metricLabel = ALL_METRIC_LABELS[foundMetric] || foundMetric;
         
         const filePath = `${graphsPath}/${file.name}`;
         
@@ -359,8 +377,8 @@ export default function ReconciliationChartsDialog({
         if (orderA !== orderB) return orderA - orderB;
         
         // Same meter - sort by metric order
-        const metricOrderA = METRIC_ORDER.indexOf(a.metric);
-        const metricOrderB = METRIC_ORDER.indexOf(b.metric);
+        const metricOrderA = currentMetricOrder.indexOf(a.metric);
+        const metricOrderB = currentMetricOrder.indexOf(b.metric);
         return metricOrderA - metricOrderB;
       });
 
