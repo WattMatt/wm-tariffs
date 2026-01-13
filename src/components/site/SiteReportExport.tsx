@@ -1173,18 +1173,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             // Leave space for heading (already added), caption, and margins
             const imgHeight = pageHeight - yPos - bottomMargin - 20; // 20 for caption space
             
-            // Detect image format from data URL
-            let imageFormat: 'PNG' | 'JPEG' = 'PNG';
-            if (schematicImageBase64.includes('data:image/jpeg') || schematicImageBase64.includes('data:image/jpg')) {
-              imageFormat = 'JPEG';
-            }
+            // Use addImageSafe to handle both PNG/JPEG and SVG images properly
+            const imageAdded = await addImageSafe(schematicImageBase64, leftMargin, yPos, imgWidth, imgHeight);
             
-            // Validate the data URL has actual content (base64 data after comma)
-            const base64Data = schematicImageBase64.split(',')[1];
-            if (!base64Data || base64Data.length < 100) {
-              console.warn("Schematic image data appears to be invalid or too small, skipping");
+            if (!imageAdded) {
+              console.warn("Schematic image could not be added, skipping");
             } else {
-              pdf.addImage(schematicImageBase64, imageFormat, leftMargin, yPos, imgWidth, imgHeight);
               yPos += imgHeight + 5;
               
               // Add caption at bottom
