@@ -93,16 +93,19 @@ export async function generateChartPath(
 /**
  * Save a single chart image to storage (legacy wrapper using new infrastructure)
  */
+/**
+ * Save a single chart SVG to storage (legacy wrapper using new infrastructure)
+ */
 export async function saveChartToStorage(
   siteId: string,
   meterNumber: string,
   metricFilename: string,
-  chartDataUrl: string,
+  chartSvgContent: string,
   chartType: ChartType = 'comparison'
 ): Promise<boolean> {
   try {
     const storagePath = await generateChartPath(siteId, meterNumber, metricFilename, chartType);
-    const result = await uploadChartImage(storagePath, chartDataUrl);
+    const result = await uploadChartImage(storagePath, chartSvgContent, 'svg');
     
     if (!result.success) {
       console.error(`Failed to save chart ${meterNumber}-${metricFilename}:`, result.error);
