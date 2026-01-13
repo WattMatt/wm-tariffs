@@ -20,7 +20,7 @@ import { SplitViewReportEditor } from "./SplitViewReportEditor";
 import SaveReportDialog from "./SaveReportDialog";
 import SavedReportsList from "./SavedReportsList";
 import { ReportGenerationProgress } from "./ReportGenerationProgress";
-import { generateMeterTypeChart, generateConsumptionChart, generateDocumentVsAssignedChart, generateTariffAnalysisChart, generateReconciliationVsDocumentChart } from "./ChartGenerator";
+import { generateMeterTypeChart, generateConsumptionChart, generateDocumentVsAssignedChart, generateReconciliationVsDocumentChart } from "./ChartGenerator";
 
 interface BatchStatus {
   batchNumber: number;
@@ -3318,141 +3318,106 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
         }
       };
 
-      // Generate tariff analysis charts BEFORE setPreviewData so they're available for PDF rendering
+      // Load pre-captured tariff analysis charts from storage (instead of generating on-the-fly)
       setGenerationProgress(80);
-      setGenerationStatus("Generating tariff analysis charts...");
+      setGenerationStatus("Loading captured analysis charts...");
       
       const tariffAnalysisCharts: Record<string, Record<string, string>> = {};
       
-      // docsWithExtractions already fetched earlier for billing comparison charts
-      if (docsWithExtractions && docsWithExtractions.length > 0) {
-        // Group documents by meter
-        const meterDocsMap = new Map<string, any[]>();
-        docsWithExtractions.forEach(doc => {
-          if (doc.meter_id && doc.document_extractions?.length > 0) {
-            if (!meterDocsMap.has(doc.meter_id)) {
-              meterDocsMap.set(doc.meter_id, []);
-            }
-            meterDocsMap.get(doc.meter_id)!.push(doc);
-          }
-        });
-
-        // Get meter details
-        const meterIds = Array.from(meterDocsMap.keys());
-        const { data: analysisMeters } = await supabase
-          .from('meters')
-          .select('*')
-          .in('id', meterIds);
-
-        if (analysisMeters && analysisMeters.length > 0) {
-          for (const meter of analysisMeters) {
-            const meterDocs = meterDocsMap.get(meter.id) || [];
-            if (meterDocs.length === 0) continue;
-
-            tariffAnalysisCharts[meter.id] = {};
-
-            // Helper to extract metric value from line_items
-            const extractMetricValue = (extraction: any, metric: string): number => {
-              const data = extraction.extracted_data;
-              if (!data) return 0;
-              
-              const lineItems = data.line_items || [];
-
-              switch (metric) {
-                case 'Total Amount':
-                  return extraction.total_amount || data.total_amount || 0;
-                case 'Basic Charge':
-                  const basicItem = lineItems.find((item: any) => item.unit === 'Monthly');
-                  return basicItem?.amount || 0;
-                case 'kVA Charge':
-                  const kvaItem = lineItems.find((item: any) => item.unit === 'kVA' && item.supply === 'Normal');
-                  return kvaItem?.amount || 0;
-                case 'kWh Charge':
-                  const kwhItem = lineItems.find((item: any) => item.unit === 'kWh' && item.supply === 'Normal');
-                  return kwhItem?.amount || 0;
-                case 'kVA Consumption':
-                  const kvaConsItem = lineItems.find((item: any) => item.unit === 'kVA');
-                  return kvaConsItem?.consumption || 0;
-                case 'kWh Consumption':
-                  const kwhConsItem = lineItems.find((item: any) => item.unit === 'kWh' && item.supply === 'Normal');
-                  return kwhConsItem?.consumption || 0;
-                default:
-                  return 0;
-              }
-            };
-
-            // Helper to determine season
-            const getSeason = (date: Date): 'winter' | 'summer' => {
-              const month = date.getMonth();
-              return (month >= 5 && month <= 7) ? 'winter' : 'summer';
-            };
-
-            // Generate charts for each metric
-            const metrics = [
-              { name: 'Total Amount', unit: 'R' },
-              { name: 'Basic Charge', unit: 'R' },
-              { name: 'kVA Charge', unit: 'R' },
-              { name: 'kWh Charge', unit: 'R' },
-              { name: 'kVA Consumption', unit: 'kVA' },
-              { name: 'kWh Consumption', unit: 'kWh' }
-            ];
-
-            for (const metric of metrics) {
-              const chartData: { period: string; value: number; winterAvg?: number; summerAvg?: number }[] = [];
-              let winterSum = 0, winterCount = 0;
-              let summerSum = 0, summerCount = 0;
-
-              for (const doc of meterDocs) {
-                const extraction = doc.document_extractions[0];
-                if (!extraction) continue;
-
-                const value = extractMetricValue(extraction, metric.name);
-                if (value === 0) continue;
-
-                const periodStart = extraction.period_start ? new Date(extraction.period_start) : null;
-                const periodEnd = extraction.period_end ? new Date(extraction.period_end) : null;
+      // Get site and client names for storage path
+      const { data: sitePathData } = await supabase
+        .from('sites')
+        .select('name, clients(name)')
+        .eq('id', siteId)
+        .single();
+      
+      if (sitePathData) {
+        const sanitizeForStoragePath = (str: string) => str
+          .trim()
+          .replace(/[^a-zA-Z0-9\s-_]/g, '')
+          .replace(/\s+/g, ' ');
+        
+        const clientName = sanitizeForStoragePath((sitePathData.clients as any)?.name || '');
+        const siteNamePath = sanitizeForStoragePath(sitePathData.name);
+        const analysisGraphsPath = `${clientName}/${siteNamePath}/Metering/Reconciliations/Graphs/Analysis`;
+        
+        // Metric mappings: chart filename to display name
+        const chartMetrics = [
+          { filename: 'total', displayName: 'Total Amount' },
+          { filename: 'basic', displayName: 'Basic Charge' },
+          { filename: 'kva-charge', displayName: 'kVA Charge' },
+          { filename: 'kwh-charge', displayName: 'kWh Charge' },
+          { filename: 'kva-consumption', displayName: 'kVA Consumption' },
+          { filename: 'kwh-consumption', displayName: 'kWh Consumption' },
+        ];
+        
+        // List files in the analysis charts folder
+        console.log(`Looking for analysis charts in: ${analysisGraphsPath}`);
+        const { data: chartFiles, error: listError } = await supabase.storage
+          .from('client-files')
+          .list(analysisGraphsPath, { limit: 1000 });
+        
+        if (listError) {
+          console.warn('Could not list analysis chart files:', listError.message);
+        } else if (chartFiles && chartFiles.length > 0) {
+          console.log(`Found ${chartFiles.length} chart files in storage`);
+          
+          // Group chart files by meter (extract meter number from filename like "M-001-total.svg")
+          const chartsByMeter = new Map<string, Map<string, string>>();
+          
+          for (const file of chartFiles) {
+            if (!file.name.endsWith('.svg')) continue;
+            
+            // Parse filename: {meterNumber}-{metricFilename}.svg
+            // e.g., "M-001-total.svg" -> meterNumber="M-001", metric="total"
+            const nameWithoutExt = file.name.replace('.svg', '');
+            
+            // Find which metric this file is for
+            for (const metric of chartMetrics) {
+              if (nameWithoutExt.endsWith(`-${metric.filename}`)) {
+                const meterNumber = nameWithoutExt.slice(0, -(metric.filename.length + 1));
                 
-                let periodLabel = 'Unknown';
-                if (periodStart && periodEnd) {
-                  periodLabel = `${periodStart.toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' })}`;
-                  const season = getSeason(periodStart);
-                  if (season === 'winter') {
-                    winterSum += value;
-                    winterCount++;
-                  } else {
-                    summerSum += value;
-                    summerCount++;
-                  }
+                if (!chartsByMeter.has(meterNumber)) {
+                  chartsByMeter.set(meterNumber, new Map());
                 }
-
-                chartData.push({
-                  period: periodLabel,
-                  value: value
-                });
+                
+                // Download the SVG content
+                const filePath = `${analysisGraphsPath}/${file.name}`;
+                const { data: svgData, error: downloadError } = await supabase.storage
+                  .from('client-files')
+                  .download(filePath);
+                
+                if (svgData && !downloadError) {
+                  const svgText = await svgData.text();
+                  // Convert SVG to data URL for embedding in PDF
+                  const encoded = encodeURIComponent(svgText)
+                    .replace(/'/g, '%27')
+                    .replace(/"/g, '%22');
+                  const dataUrl = `data:image/svg+xml,${encoded}`;
+                  chartsByMeter.get(meterNumber)!.set(metric.displayName, dataUrl);
+                  console.log(`Loaded chart: ${meterNumber} - ${metric.displayName}`);
+                }
+                break;
               }
-
-              if (chartData.length === 0) continue;
-
-              // Calculate averages
-              const winterAvg = winterCount > 0 ? winterSum / winterCount : undefined;
-              const summerAvg = summerCount > 0 ? summerSum / summerCount : undefined;
-
-              // Add averages to all data points
-              chartData.forEach(d => {
-                d.winterAvg = winterAvg;
-                d.summerAvg = summerAvg;
-              });
-
-              // Generate and store chart
-              const chartImage = generateTariffAnalysisChart(
-                `${metric.name} Over Time`,
-                metric.unit,
-                chartData
-              );
-
-              tariffAnalysisCharts[meter.id][metric.name] = chartImage;
             }
           }
+          
+          // Convert chartsByMeter to tariffAnalysisCharts (keyed by meter ID)
+          // We need to match meter_number back to meter.id
+          for (const [meterNumber, metricsMap] of chartsByMeter.entries()) {
+            // Find meter by meter_number
+            const meter = meterData.find(m => m.meter_number === meterNumber);
+            if (meter) {
+              tariffAnalysisCharts[meter.id] = {};
+              for (const [metricName, chartDataUrl] of metricsMap.entries()) {
+                tariffAnalysisCharts[meter.id][metricName] = chartDataUrl;
+              }
+            }
+          }
+          
+          console.log(`Loaded analysis charts for ${Object.keys(tariffAnalysisCharts).length} meters`);
+        } else {
+          console.log('No pre-captured analysis charts found in storage');
         }
       }
 
