@@ -1458,8 +1458,44 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         pdf.addPage();
         yPos = topMargin;
         
-        // Then render the comparison tables
-        await renderSection('tariff-comparison');
+        // Render comparison tables grouped by meter (2 meters per page to match chart layout)
+        const tariffComparisonSection = sections.find(s => s.id === 'tariff-comparison');
+        if (tariffComparisonSection) {
+          const content = tariffComparisonSection.content;
+          
+          // Split content by meter sections (### Meter: ...)
+          const meterSections = content.split(/(?=###\s*Meter:)/);
+          const metersPerPage = 2;
+          
+          for (let meterIdx = 0; meterIdx < meterSections.length; meterIdx++) {
+            const meterContent = meterSections[meterIdx].trim();
+            if (!meterContent || !meterContent.startsWith('###')) continue;
+            
+            const actualMeterIdx = meterSections.slice(0, meterIdx + 1).filter(s => s.trim().startsWith('###')).length - 1;
+            const meterPositionOnPage = actualMeterIdx % metersPerPage;
+            
+            // Start new page for every 2 meters (except first)
+            if (actualMeterIdx > 0 && meterPositionOnPage === 0) {
+              addFooter();
+              addPageNumber();
+              pdf.addPage();
+              yPos = topMargin;
+            }
+            
+            // Estimate content height - check if we need a page break
+            const estimatedHeight = 150; // Conservative estimate for a meter table
+            if (yPos + estimatedHeight > pageHeight - bottomMargin && meterPositionOnPage !== 0) {
+              addFooter();
+              addPageNumber();
+              pdf.addPage();
+              yPos = topMargin;
+            }
+            
+            // Render this meter's content
+            await renderContent(meterContent);
+            addSpacer(8);
+          }
+        }
         addSpacer(8);
         
         // Section 5: Tariff Analysis
