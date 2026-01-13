@@ -1452,6 +1452,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           }
         }
         
+        // Start new page for comparison tables
+        addFooter();
+        addPageNumber();
+        pdf.addPage();
+        yPos = topMargin;
+        
         // Then render the comparison tables
         await renderSection('tariff-comparison');
         addSpacer(8);
