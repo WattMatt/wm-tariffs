@@ -1168,18 +1168,45 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         // Add schematic image as full page first item if available
         if (schematicImageBase64 && typeof schematicImageBase64 === 'string' && schematicImageBase64.startsWith('data:image/')) {
           try {
-            // Calculate dimensions for full-page image
-            const imgWidth = pageWidth - leftMargin - rightMargin;
-            // Leave space for heading (already added), caption, and margins
-            const imgHeight = pageHeight - yPos - bottomMargin - 20; // 20 for caption space
+            // Calculate available space for the image
+            const maxImgWidth = pageWidth - leftMargin - rightMargin;
+            const maxImgHeight = pageHeight - yPos - bottomMargin - 20; // 20 for caption space
+            
+            // Get actual image dimensions to maintain aspect ratio
+            let finalWidth = maxImgWidth;
+            let finalHeight = maxImgHeight;
+            
+            // Load image to get actual dimensions
+            const img = new Image();
+            await new Promise<void>((resolve, reject) => {
+              img.onload = () => resolve();
+              img.onerror = () => reject(new Error('Failed to load schematic image'));
+              img.src = schematicImageBase64;
+            });
+            
+            const aspectRatio = img.naturalWidth / img.naturalHeight;
+            
+            // Calculate dimensions that fit within available space while maintaining aspect ratio
+            if (aspectRatio > (maxImgWidth / maxImgHeight)) {
+              // Image is wider than available space - constrain by width
+              finalWidth = maxImgWidth;
+              finalHeight = maxImgWidth / aspectRatio;
+            } else {
+              // Image is taller than available space - constrain by height
+              finalHeight = maxImgHeight;
+              finalWidth = maxImgHeight * aspectRatio;
+            }
+            
+            // Center the image horizontally if it's narrower than available width
+            const imgX = leftMargin + (maxImgWidth - finalWidth) / 2;
             
             // Use addImageSafe to handle both PNG/JPEG and SVG images properly
-            const imageAdded = await addImageSafe(schematicImageBase64, leftMargin, yPos, imgWidth, imgHeight);
+            const imageAdded = await addImageSafe(schematicImageBase64, imgX, yPos, finalWidth, finalHeight);
             
             if (!imageAdded) {
               console.warn("Schematic image could not be added, skipping");
             } else {
-              yPos += imgHeight + 5;
+              yPos += finalHeight + 5;
               
               // Add caption at bottom
               pdf.setFontSize(9);
