@@ -1458,42 +1458,72 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         pdf.addPage();
         yPos = topMargin;
         
-        // Render comparison tables grouped by meter (2 meters per page to match chart layout)
+        // Render comparison tables with smart pagination:
+        // - Fit 2 tables per page if both are small enough
+        // - Use 1 table per page if table is large
         const tariffComparisonSection = sections.find(s => s.id === 'tariff-comparison');
         if (tariffComparisonSection) {
           const content = tariffComparisonSection.content;
           
           // Split content by meter sections (### Meter: ...)
-          const meterSections = content.split(/(?=###\s*Meter:)/);
-          const metersPerPage = 2;
+          const meterSections = content.split(/(?=###\s*Meter:)/).filter(s => s.trim().startsWith('###'));
           
-          for (let meterIdx = 0; meterIdx < meterSections.length; meterIdx++) {
-            const meterContent = meterSections[meterIdx].trim();
-            if (!meterContent || !meterContent.startsWith('###')) continue;
+          // Helper to estimate table height based on row count
+          const estimateTableHeight = (meterContent: string): number => {
+            const lines = meterContent.split('\n');
+            const tableRows = lines.filter(l => l.trim().startsWith('|') && !l.includes('---')).length;
+            const headerHeight = 25; // Meter header
+            const tableHeaderHeight = 20;
+            const rowHeight = 12;
+            return headerHeight + tableHeaderHeight + (tableRows * rowHeight) + 15; // 15 for spacing
+          };
+          
+          // Maximum height that allows 2 tables to fit on one page
+          const usablePageHeight = pageHeight - topMargin - bottomMargin - 20;
+          const maxHeightForTwo = usablePageHeight / 2 - 10; // Half page minus spacing
+          
+          let i = 0;
+          while (i < meterSections.length) {
+            const currentContent = meterSections[i].trim();
+            const currentHeight = estimateTableHeight(currentContent);
             
-            const actualMeterIdx = meterSections.slice(0, meterIdx + 1).filter(s => s.trim().startsWith('###')).length - 1;
-            const meterPositionOnPage = actualMeterIdx % metersPerPage;
-            
-            // Start new page for every 2 meters (except first)
-            if (actualMeterIdx > 0 && meterPositionOnPage === 0) {
+            // Check if we need a new page
+            if (yPos > topMargin + 10) {
               addFooter();
               addPageNumber();
               pdf.addPage();
               yPos = topMargin;
             }
             
-            // Estimate content height - check if we need a page break
-            const estimatedHeight = 150; // Conservative estimate for a meter table
-            if (yPos + estimatedHeight > pageHeight - bottomMargin && meterPositionOnPage !== 0) {
-              addFooter();
-              addPageNumber();
-              pdf.addPage();
-              yPos = topMargin;
-            }
+            // Check if current table is "large" (takes more than half the page)
+            const isCurrentLarge = currentHeight > maxHeightForTwo;
             
-            // Render this meter's content
-            await renderContent(meterContent);
-            addSpacer(8);
+            if (isCurrentLarge) {
+              // Large table: render alone on this page
+              await renderContent(currentContent);
+              addSpacer(8);
+              i++;
+            } else {
+              // Small table: try to fit another one on the same page
+              await renderContent(currentContent);
+              addSpacer(8);
+              i++;
+              
+              // Check if there's a next table and if it would fit
+              if (i < meterSections.length) {
+                const nextContent = meterSections[i].trim();
+                const nextHeight = estimateTableHeight(nextContent);
+                const combinedHeight = currentHeight + nextHeight + 16; // 16 for spacing between
+                
+                if (combinedHeight <= usablePageHeight) {
+                  // Both fit on one page - render the second one
+                  await renderContent(nextContent);
+                  addSpacer(8);
+                  i++;
+                }
+                // Otherwise, next iteration will start a new page
+              }
+            }
           }
         }
         addSpacer(8);
