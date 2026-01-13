@@ -1110,7 +1110,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             // Leave space for heading (already added), caption, and margins
             const imgHeight = pageHeight - yPos - bottomMargin - 20; // 20 for caption space
             
-            pdf.addImage(schematicImageBase64, 'JPEG', leftMargin, yPos, imgWidth, imgHeight);
+            // Detect image format from data URL or default to PNG
+            const imageFormat = schematicImageBase64.includes('data:image/jpeg') ? 'JPEG' : 'PNG';
+            pdf.addImage(schematicImageBase64, imageFormat, leftMargin, yPos, imgWidth, imgHeight);
             yPos += imgHeight + 5;
             
             // Add caption at bottom
