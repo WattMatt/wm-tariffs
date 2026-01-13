@@ -1293,8 +1293,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                 } else if (chartData.type === 'png' || typeof chartData === 'string') {
                   // Legacy PNG support (chartData is base64 string or has content property)
                   const imgData = typeof chartData === 'string' ? chartData : chartData.content;
-                  pdf.addImage(imgData, 'PNG', x, chartY, width, height);
-                  return true;
+                  return await addImageSafe(imgData, x, chartY, width, height);
                 }
               } catch (err) {
                 console.error("Error adding chart:", err);
@@ -1418,7 +1417,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                 const [chargeType, chartImage] = chartEntries[i + j];
                 if (chartImage) {
                   const chartX = leftMargin + (j * (chartWidth + 5));
-                  pdf.addImage(chartImage as string, 'PNG', chartX, yPos, chartWidth - 2, chartHeight);
+                  await addImageSafe(chartImage as string, chartX, yPos, chartWidth - 2, chartHeight);
                 }
               }
               yPos += chartHeight + 5;
@@ -1471,7 +1470,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               for (let j = 0; j < 2 && (i + j) < availableCharts.length; j++) {
                 const { chartImage } = availableCharts[i + j];
                 const chartX = leftMargin + (j * (chartWidth + 5));
-                pdf.addImage(chartImage, 'PNG', chartX, yPos, chartWidth - 2, chartHeight);
+                await addImageSafe(chartImage, chartX, yPos, chartWidth - 2, chartHeight);
               }
               yPos += chartHeight + 5;
             }
@@ -1515,7 +1514,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                 const [metricTitle, chartImage] = chartEntries[i + j];
                 if (chartImage) {
                   const chartX = leftMargin + (j * (chartWidth + 5));
-                  pdf.addImage(chartImage as string, 'PNG', chartX, yPos, chartWidth - 2, chartHeight);
+                  await addImageSafe(chartImage as string, chartX, yPos, chartWidth - 2, chartHeight);
                 }
               }
               yPos += chartHeight + 5;
