@@ -1579,10 +1579,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                 const chartX = leftMargin + (j * (chartWidth + 5));
                 await addImageSafe(chartImage, chartX, yPos, chartWidth - 2, chartHeight);
               }
-              yPos += chartHeight + 5;
+              yPos += chartHeight + 2;
             }
-            
-            addSpacer(8);
           }
         } else {
           addText("No tariff analysis data available.");
@@ -1634,10 +1632,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                   await addImageSafe(chartImage as string, chartX, yPos, chartWidth - 2, chartHeight);
                 }
               }
-              yPos += chartHeight + 5;
+              yPos += chartHeight + 2;
             }
-            
-            addSpacer(8);
           }
         } else {
           addText("No billing comparison data available.");
