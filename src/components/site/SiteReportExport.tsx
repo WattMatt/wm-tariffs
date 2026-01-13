@@ -467,6 +467,69 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             .replace(/"/g, '"')
             .replace(/"/g, '"');
         };
+
+        // Helper to add an image (handles both PNG/JPEG and SVG data URLs)
+        const addImageSafe = async (imageData: string, x: number, y: number, width: number, height: number): Promise<boolean> => {
+          if (!imageData || typeof imageData !== 'string') {
+            console.warn("Invalid image data provided to addImageSafe");
+            return false;
+          }
+          
+          try {
+            // Check if it's an SVG data URL
+            if (imageData.startsWith('data:image/svg+xml')) {
+              // Decode the SVG content
+              let svgContent = '';
+              if (imageData.includes(',')) {
+                const base64Part = imageData.split(',')[1];
+                if (imageData.includes(';base64,')) {
+                  svgContent = atob(base64Part);
+                } else {
+                  svgContent = decodeURIComponent(base64Part);
+                }
+              }
+              
+              if (svgContent) {
+                const parser = new DOMParser();
+                const svgDoc = parser.parseFromString(svgContent, 'image/svg+xml');
+                const svgElement = svgDoc.documentElement;
+                
+                // Check for parse errors
+                const parseError = svgDoc.querySelector('parsererror');
+                if (parseError) {
+                  console.error("SVG parse error in addImageSafe:", parseError.textContent);
+                  return false;
+                }
+                
+                await svg2pdf(svgElement, pdf, { x, y, width, height });
+                return true;
+              }
+              return false;
+            }
+            
+            // Handle regular PNG/JPEG images
+            if (imageData.startsWith('data:image/png') || imageData.startsWith('data:image/jpeg') || imageData.startsWith('data:image/jpg')) {
+              const format = imageData.includes('data:image/jpeg') || imageData.includes('data:image/jpg') ? 'JPEG' : 'PNG';
+              
+              // Validate base64 content
+              const base64Data = imageData.split(',')[1];
+              if (!base64Data || base64Data.length < 50) {
+                console.warn("Image data appears to be invalid or too small");
+                return false;
+              }
+              
+              pdf.addImage(imageData, format, x, y, width, height);
+              return true;
+            }
+            
+            // For external URLs or unknown formats, try as PNG
+            pdf.addImage(imageData, 'PNG', x, y, width, height);
+            return true;
+          } catch (err) {
+            console.error("Error in addImageSafe:", err);
+            return false;
+          }
+        };
         
         // Helper to add blue sidebar
         const addBlueSidebar = () => {
@@ -651,7 +714,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         };
         
         // Helper to render content with markdown support
-        const renderContent = (text: string, fontSize: number = 9) => {
+        const renderContent = async (text: string, fontSize: number = 9): Promise<void> => {
           if (!text || text.trim() === '') return;
           
           // Check for JSON chart blocks (with or without code fences)
@@ -671,7 +734,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             
             // Render text before chart
             if (beforeChart.trim()) {
-              renderContent(beforeChart, fontSize);
+              await renderContent(beforeChart, fontSize);
             }
             
             // Parse and render chart
@@ -691,7 +754,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             
             // Render text after chart (recursively)
             if (afterChart.trim()) {
-              renderContent(afterChart, fontSize);
+              await renderContent(afterChart, fontSize);
             }
             return;
           }
@@ -705,7 +768,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             
             // Render any text before header (recursively to handle images and tables)
             if (beforeHeader.trim()) {
-              renderContent(beforeHeader, fontSize);
+              await renderContent(beforeHeader, fontSize);
             }
             
             // Render header as subheading
@@ -713,7 +776,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             
             // Continue with text after header
             if (afterHeader.trim()) {
-              renderContent(afterHeader, fontSize);
+              await renderContent(afterHeader, fontSize);
             }
             return;
           }
@@ -729,23 +792,24 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             
             // Render text before image
             if (beforeImage.trim()) {
-              renderContent(beforeImage, fontSize);
+              await renderContent(beforeImage, fontSize);
             }
             
-            // Render the image
-            try {
-              // Check if we need a new page
-              if (yPos > pageHeight - bottomMargin - 100) {
-                addFooter();
-                addPageNumber();
-                pdf.addPage();
-                yPos = topMargin;
-              }
-              
-              const imgWidth = pageWidth - leftMargin - rightMargin;
-              // Calculate proportional height based on original chart dimensions (500x320 for tariff charts)
-              const imgHeight = (320 / 500) * imgWidth;
-              pdf.addImage(imageUrl, 'PNG', leftMargin, yPos, imgWidth, imgHeight);
+            // Render the image using safe handler
+            // Check if we need a new page
+            if (yPos > pageHeight - bottomMargin - 100) {
+              addFooter();
+              addPageNumber();
+              pdf.addPage();
+              yPos = topMargin;
+            }
+            
+            const imgWidth = pageWidth - leftMargin - rightMargin;
+            // Calculate proportional height based on original chart dimensions (500x320 for tariff charts)
+            const imgHeight = (320 / 500) * imgWidth;
+            
+            const imageAdded = await addImageSafe(imageUrl, leftMargin, yPos, imgWidth, imgHeight);
+            if (imageAdded) {
               yPos += imgHeight + 3;
               
               // Add caption if available
@@ -756,14 +820,13 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                 pdf.setFont("helvetica", "normal");
                 yPos += 6;
               }
-            } catch (err) {
-              console.error(`Error adding image:`, err);
-              addText(`[Image rendering error: ${err instanceof Error ? err.message : 'Unknown error'}]`, fontSize, false);
+            } else {
+              addText(`[Image could not be rendered]`, fontSize, false);
             }
             
             // Render text after image (recursively)
             if (afterImage.trim()) {
-              renderContent(afterImage, fontSize);
+              await renderContent(afterImage, fontSize);
             }
             return;
           }
@@ -780,7 +843,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             
             // Render text before table
             if (beforeTable.trim()) {
-              renderContent(beforeTable, fontSize);
+              await renderContent(beforeTable, fontSize);
               yPos += 3;
             }
             
@@ -794,7 +857,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             
             // Render text after table (recursively in case of multiple tables)
             if (afterTable.trim()) {
-              renderContent(afterTable, fontSize);
+              await renderContent(afterTable, fontSize);
             }
             return;
           }
@@ -1035,7 +1098,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         };
         
         // Helper to render a section (handles both text and chart sections)
-        const renderSection = (sectionId: string) => {
+        const renderSection = async (sectionId: string): Promise<void> => {
           const section = sections.find(s => s.id === sectionId);
           if (!section) return;
           
@@ -1044,21 +1107,22 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           const imageMatch = section.content.match(imageRegex);
           
           if (imageMatch && section.type === 'chart') {
-            // This is a chart image - render it
+            // This is a chart image - render it using safe handler
             const [_, altText, imageUrl] = imageMatch;
             
-            try {
-              // Check if we need a new page
-              if (yPos > pageHeight - 150) {
-                addFooter();
-                addPageNumber();
-                pdf.addPage();
-                yPos = topMargin;
-              }
-              
-              const imgWidth = pageWidth - leftMargin - rightMargin;
-              const imgHeight = 120;
-              pdf.addImage(imageUrl, 'PNG', leftMargin, yPos, imgWidth, imgHeight);
+            // Check if we need a new page
+            if (yPos > pageHeight - 150) {
+              addFooter();
+              addPageNumber();
+              pdf.addPage();
+              yPos = topMargin;
+            }
+            
+            const imgWidth = pageWidth - leftMargin - rightMargin;
+            const imgHeight = 120;
+            
+            const imageAdded = await addImageSafe(imageUrl, leftMargin, yPos, imgWidth, imgHeight);
+            if (imageAdded) {
               yPos += imgHeight + 5;
               
               // Add caption if available
@@ -1069,9 +1133,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                 pdf.setFont("helvetica", "normal");
                 yPos += 10;
               }
-            } catch (err) {
-              console.error(`Error adding chart image for ${sectionId}:`, err);
-              addText(`[Chart image rendering error: ${err instanceof Error ? err.message : 'Unknown error'}]`, 10, false);
+            } else {
+              addText(`[Chart image could not be rendered]`, 10, false);
             }
           } else if (section.type === 'chart') {
             // Legacy: For chart sections with JSON content, parse and render the chart
@@ -1090,48 +1153,59 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             }
           } else {
             // For text sections, render content (which may contain embedded charts)
-            renderContent(section.content);
+            await renderContent(section.content);
           }
         };
         
         // Section 1: Executive Summary
         addSectionHeading("1. EXECUTIVE SUMMARY", 16, true);
-        renderSection('executive-summary');
+        await renderSection('executive-summary');
         addSpacer(8);
         
         // Section 2: Site Infrastructure
         addSectionHeading("2. SITE INFRASTRUCTURE", 16, true);
         
         // Add schematic image as full page first item if available
-        if (schematicImageBase64) {
+        if (schematicImageBase64 && typeof schematicImageBase64 === 'string' && schematicImageBase64.startsWith('data:image/')) {
           try {
             // Calculate dimensions for full-page image
             const imgWidth = pageWidth - leftMargin - rightMargin;
             // Leave space for heading (already added), caption, and margins
             const imgHeight = pageHeight - yPos - bottomMargin - 20; // 20 for caption space
             
-            // Detect image format from data URL or default to PNG
-            const imageFormat = schematicImageBase64.includes('data:image/jpeg') ? 'JPEG' : 'PNG';
-            pdf.addImage(schematicImageBase64, imageFormat, leftMargin, yPos, imgWidth, imgHeight);
-            yPos += imgHeight + 5;
+            // Detect image format from data URL
+            let imageFormat: 'PNG' | 'JPEG' = 'PNG';
+            if (schematicImageBase64.includes('data:image/jpeg') || schematicImageBase64.includes('data:image/jpg')) {
+              imageFormat = 'JPEG';
+            }
             
-            // Add caption at bottom
-            pdf.setFontSize(9);
-            pdf.setFont("helvetica", "italic");
-            pdf.text("Figure 1: Site Metering Schematic Diagram", pageWidth / 2, yPos, { align: "center" });
-            pdf.setFont("helvetica", "normal");
-            
-            // Start new page for remaining content
-            addFooter();
-            addPageNumber();
-            pdf.addPage();
-            yPos = topMargin;
+            // Validate the data URL has actual content (base64 data after comma)
+            const base64Data = schematicImageBase64.split(',')[1];
+            if (!base64Data || base64Data.length < 100) {
+              console.warn("Schematic image data appears to be invalid or too small, skipping");
+            } else {
+              pdf.addImage(schematicImageBase64, imageFormat, leftMargin, yPos, imgWidth, imgHeight);
+              yPos += imgHeight + 5;
+              
+              // Add caption at bottom
+              pdf.setFontSize(9);
+              pdf.setFont("helvetica", "italic");
+              pdf.text("Figure 1: Site Metering Schematic Diagram", pageWidth / 2, yPos, { align: "center" });
+              pdf.setFont("helvetica", "normal");
+              
+              // Start new page for remaining content
+              addFooter();
+              addPageNumber();
+              pdf.addPage();
+              yPos = topMargin;
+            }
           } catch (err) {
             console.error("Error adding schematic to preview:", err);
+            // Continue without the schematic image - don't fail the entire PDF
           }
         }
         
-        renderSection('site-infrastructure');
+        await renderSection('site-infrastructure');
         addSpacer(8);
         
         // Section 3: Tariff Configuration
@@ -1313,7 +1387,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           yPos = topMargin + (tariffCountOnPage * halfPageHeight);
         } else {
           // Fallback if no charts - render the markdown section
-          renderSection('tariff-configuration');
+          await renderSection('tariff-configuration');
         }
         
         addSpacer(8);
@@ -1361,7 +1435,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         }
         
         // Then render the comparison tables
-        renderSection('tariff-comparison');
+        await renderSection('tariff-comparison');
         addSpacer(8);
         
         // Section 5: Tariff Analysis
@@ -1462,7 +1536,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         // Section 7: Metering Data Analysis (renumbered from 6)
         addSectionHeading("7. METERING DATA ANALYSIS", 16, true);
-        renderSection('metering-data-analysis');
+        await renderSection('metering-data-analysis');
         addSpacer(5);
         
         // Add KPI Cards Section for data collection
@@ -1605,8 +1679,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         addSpacer(5);
         
         // Render chart sections (if available)
-        renderSection('meter-type-chart');
-        renderSection('consumption-chart');
+        await renderSection('meter-type-chart');
+        await renderSection('consumption-chart');
         
         addSubsectionHeading("Audit Period");
         addText(`${format(new Date(reconciliationData.readingsPeriod.split(' - ')[0]), 'dd MMM yyyy')} - ${format(new Date(reconciliationData.readingsPeriod.split(' - ')[1]), 'dd MMM yyyy')}`);
@@ -1620,13 +1694,13 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         const docValidationContent = getSectionContent('document-validation');
         if (docValidationContent) {
           addSectionHeading("8. DOCUMENT & INVOICE VALIDATION", 16, true);
-          renderSection('document-validation');
+          await renderSection('document-validation');
           addSpacer(8);
         }
         
         // Section 9: Reconciliation Results (renumbered from 8)
         addSectionHeading("9. RECONCILIATION RESULTS", 16, true);
-        renderSection('reconciliation-results');
+        await renderSection('reconciliation-results');
         addSpacer(5);
         
         addSubsectionHeading("Basic Reconciliation Metrics");
@@ -1686,13 +1760,13 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         const costAnalysisContent = getSectionContent('cost-analysis');
         if (costAnalysisContent) {
           addSectionHeading("10. COST ANALYSIS", 16, true);
-          renderSection('cost-analysis');
+          await renderSection('cost-analysis');
           addSpacer(8);
         }
         
         // Section 11: Findings & Anomalies (renumbered from 10)
         addSectionHeading("11. FINDINGS & ANOMALIES", 16, true);
-        renderSection('findings-anomalies');
+        await renderSection('findings-anomalies');
         addSpacer(5);
         
         // Anomalies detail (if any)
@@ -1710,7 +1784,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         // Section 12: Recommendations (renumbered from 11)
         addSectionHeading("12. RECOMMENDATIONS", 16, true);
-        renderSection('recommendations');
+        await renderSection('recommendations');
         addSpacer(8);
         
         // Add footer and page number to last page
