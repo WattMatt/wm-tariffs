@@ -1427,16 +1427,38 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             addSubsectionHeading(`Meter: ${meterChartData.meterNumber}${meterChartData.meterName ? ` (${meterChartData.meterName})` : ''}`);
             addSpacer(2);
             
-            // Render charts in 2x2 grid (max 4 charts per meter in compact view)
-            const chartEntries = Object.entries(meterChartData.charts || {}).slice(0, 4); // Limit to 4 charts
+            // Render charts in 2x2 grid (always 4 positions for consistent layout)
+            const chartEntries = Object.entries(meterChartData.charts || {}).slice(0, 4);
             
-            for (let i = 0; i < chartEntries.length; i += 2) {
-              // Render up to 2 charts per row
-              for (let j = 0; j < 2 && (i + j) < chartEntries.length; j++) {
-                const [chargeType, chartImage] = chartEntries[i + j];
-                if (chartImage) {
-                  const chartX = leftMargin + (j * (chartWidth + chartSpacing));
-                  await addImageSafe(chartImage as string, chartX, yPos, chartWidth, chartHeight);
+            // Always render 2 rows of 2 charts (4 total positions)
+            for (let row = 0; row < 2; row++) {
+              for (let col = 0; col < 2; col++) {
+                const chartIndex = row * 2 + col;
+                const chartX = leftMargin + (col * (chartWidth + chartSpacing));
+                
+                if (chartIndex < chartEntries.length) {
+                  const [chargeType, chartImage] = chartEntries[chartIndex];
+                  if (chartImage) {
+                    await addImageSafe(chartImage as string, chartX, yPos, chartWidth, chartHeight);
+                  } else {
+                    // Draw placeholder for missing chart image
+                    pdf.setDrawColor(200, 200, 200);
+                    pdf.setFillColor(248, 248, 248);
+                    pdf.roundedRect(chartX, yPos, chartWidth, chartHeight, 2, 2, 'FD');
+                    pdf.setFontSize(8);
+                    pdf.setTextColor(150, 150, 150);
+                    pdf.text('No chart data', chartX + chartWidth / 2, yPos + chartHeight / 2, { align: 'center' });
+                    pdf.setTextColor(0, 0, 0);
+                  }
+                } else {
+                  // Draw placeholder for empty position
+                  pdf.setDrawColor(200, 200, 200);
+                  pdf.setFillColor(248, 248, 248);
+                  pdf.roundedRect(chartX, yPos, chartWidth, chartHeight, 2, 2, 'FD');
+                  pdf.setFontSize(8);
+                  pdf.setTextColor(150, 150, 150);
+                  pdf.text('No chart available', chartX + chartWidth / 2, yPos + chartHeight / 2, { align: 'center' });
+                  pdf.setTextColor(0, 0, 0);
                 }
               }
               yPos += chartHeight + chartSpacing;
