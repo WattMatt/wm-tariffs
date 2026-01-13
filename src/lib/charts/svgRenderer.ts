@@ -816,3 +816,565 @@ export function generateAssignmentChartSVG(
   svg += '</svg>';
   return svg;
 }
+
+// ==================== Pie Chart SVG ====================
+
+/**
+ * Generate a pie chart as SVG string
+ */
+export function generatePieChartSVG(
+  data: number[],
+  labels: string[],
+  width: number = 400,
+  height: number = 300
+): string {
+  if (data.length === 0 || data.every(v => v === 0)) return '';
+
+  const colors = [
+    '#3b82f6', '#22c55e', '#f59e0b', '#ef4444', 
+    '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'
+  ];
+
+  const centerX = width / 2;
+  const centerY = height / 2 - 20;
+  const radius = Math.min(width, height) * 0.3;
+  const total = data.reduce((sum, val) => sum + val, 0);
+
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`;
+  svg += `<rect width="${width}" height="${height}" fill="#ffffff"/>`;
+
+  let currentAngle = -Math.PI / 2;
+
+  // Draw pie slices
+  data.forEach((value, index) => {
+    if (value <= 0) return;
+    
+    const sliceAngle = (value / total) * 2 * Math.PI;
+    const endAngle = currentAngle + sliceAngle;
+    
+    const x1 = centerX + radius * Math.cos(currentAngle);
+    const y1 = centerY + radius * Math.sin(currentAngle);
+    const x2 = centerX + radius * Math.cos(endAngle);
+    const y2 = centerY + radius * Math.sin(endAngle);
+    
+    const largeArcFlag = sliceAngle > Math.PI ? 1 : 0;
+    const color = colors[index % colors.length];
+    
+    svg += `<path d="M${centerX},${centerY} L${x1},${y1} A${radius},${radius} 0 ${largeArcFlag},1 ${x2},${y2} Z" fill="${color}" stroke="#ffffff" stroke-width="2"/>`;
+    
+    currentAngle = endAngle;
+  });
+
+  // Draw legend
+  const legendX = 15;
+  let legendY = height - (labels.length * 22) - 10;
+
+  labels.forEach((label, index) => {
+    if (data[index] <= 0) return;
+    
+    const color = colors[index % colors.length];
+    const percentage = ((data[index] / total) * 100).toFixed(1);
+    
+    svg += `<rect x="${legendX}" y="${legendY}" width="12" height="12" fill="${color}"/>`;
+    svg += `<text x="${legendX + 16}" y="${legendY + 10}" font-family="sans-serif" font-size="10" fill="#000000">${escapeXml(label)}: ${data[index].toLocaleString()} (${percentage}%)</text>`;
+    legendY += 22;
+  });
+
+  svg += '</svg>';
+  return svg;
+}
+
+// ==================== Clustered Tariff Chart SVG ====================
+
+/**
+ * Generate a clustered bar chart for winter/summer tariff comparison as SVG
+ */
+export function generateClusteredTariffChartSVG(
+  title: string,
+  unit: string,
+  winterData: { label: string; value: number }[],
+  summerData: { label: string; value: number }[],
+  width: number = 280,
+  height: number = 340
+): string {
+  if (winterData.length === 0) return '';
+
+  const winterColor = '#3b82f6';  // Blue for Winter
+  const summerColor = '#f97316';  // Orange for Summer
+
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`;
+  svg += `<rect width="${width}" height="${height}" fill="#ffffff"/>`;
+
+  // Title
+  svg += `<text x="${width / 2}" y="20" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="bold" fill="#000000">${escapeXml(title)}</text>`;
+  svg += `<text x="${width / 2}" y="35" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#000000">(${escapeXml(unit)})</text>`;
+
+  // Legend
+  const legendY = 48;
+  svg += `<rect x="10" y="${legendY}" width="10" height="10" fill="${winterColor}"/>`;
+  svg += `<text x="23" y="${legendY + 8}" font-family="sans-serif" font-size="9" fill="#000000">Winter</text>`;
+  svg += `<rect x="60" y="${legendY}" width="10" height="10" fill="${summerColor}"/>`;
+  svg += `<text x="73" y="${legendY + 8}" font-family="sans-serif" font-size="9" fill="#000000">Summer</text>`;
+
+  const padding = 25;
+  const bottomPadding = 60;
+  const topPadding = 70;
+  const chartWidth = width - padding * 2;
+  const chartHeight = height - topPadding - bottomPadding;
+  const clusterWidth = chartWidth / winterData.length;
+  const barWidth = (clusterWidth - 6) / 2;
+
+  const maxValue = Math.max(
+    ...winterData.map(d => d.value),
+    ...summerData.map(d => d.value),
+    1
+  );
+
+  // Draw clustered bars
+  winterData.forEach((winter, index) => {
+    const summer = summerData[index];
+    const clusterX = padding + index * clusterWidth;
+
+    // Winter bar
+    const winterBarHeight = maxValue > 0 ? (winter.value / maxValue) * chartHeight : 0;
+    const winterY = height - bottomPadding - winterBarHeight;
+    svg += `<rect x="${clusterX + 2}" y="${winterY}" width="${barWidth}" height="${winterBarHeight}" fill="${winterColor}"/>`;
+
+    // Summer bar
+    const summerBarHeight = maxValue > 0 ? (summer.value / maxValue) * chartHeight : 0;
+    const summerY = height - bottomPadding - summerBarHeight;
+    svg += `<rect x="${clusterX + barWidth + 4}" y="${summerY}" width="${barWidth}" height="${summerBarHeight}" fill="${summerColor}"/>`;
+
+    // Values on top
+    if (winter.value > 0) {
+      svg += `<text x="${clusterX + barWidth / 2 + 2}" y="${winterY - 3}" text-anchor="middle" font-family="sans-serif" font-size="9" font-weight="bold" fill="#000000">${winter.value.toLocaleString()}</text>`;
+    }
+    if (summer.value > 0) {
+      svg += `<text x="${clusterX + barWidth * 1.5 + 4}" y="${summerY - 3}" text-anchor="middle" font-family="sans-serif" font-size="9" font-weight="bold" fill="#000000">${summer.value.toLocaleString()}</text>`;
+    }
+  });
+
+  // X-axis labels
+  winterData.forEach((period, index) => {
+    const x = padding + index * clusterWidth + clusterWidth / 2;
+    svg += `<text x="${x}" y="${height - bottomPadding + 15}" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#000000">${escapeXml(period.label)}</text>`;
+  });
+
+  // Percentage increases
+  if (winterData.length >= 2) {
+    const firstWinter = winterData[0].value;
+    const lastWinter = winterData[winterData.length - 1].value;
+
+    if (firstWinter > 0) {
+      const overallIncrease = ((lastWinter - firstWinter) / firstWinter * 100).toFixed(1);
+
+      let totalYoY = 0;
+      let validTransitions = 0;
+      for (let i = 1; i < winterData.length; i++) {
+        if (winterData[i - 1].value > 0) {
+          totalYoY += (winterData[i].value - winterData[i - 1].value) / winterData[i - 1].value * 100;
+          validTransitions++;
+        }
+      }
+
+      if (validTransitions > 0) {
+        const avgYoY = (totalYoY / validTransitions).toFixed(1);
+        svg += `<text x="${width - 10}" y="${height - 30}" text-anchor="end" font-family="sans-serif" font-size="10" fill="#666666">Overall: +${overallIncrease}%</text>`;
+        svg += `<text x="${width - 10}" y="${height - 18}" text-anchor="end" font-family="sans-serif" font-size="10" fill="#666666">Avg YoY: +${avgYoY}%</text>`;
+      }
+    }
+  }
+
+  svg += '</svg>';
+  return svg;
+}
+
+// ==================== Tariff Comparison Chart SVG (Single Series) ====================
+
+/**
+ * Generate a simple bar chart for tariff period comparison as SVG
+ */
+export function generateTariffComparisonChartSVG(
+  title: string,
+  unit: string,
+  periods: { label: string; value: number }[],
+  width: number = 280,
+  height: number = 340
+): string {
+  if (periods.length === 0) return '';
+
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`;
+  svg += `<rect width="${width}" height="${height}" fill="#ffffff"/>`;
+
+  // Title
+  svg += `<text x="${width / 2}" y="20" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="bold" fill="#000000">${escapeXml(title)}</text>`;
+  svg += `<text x="${width / 2}" y="35" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#000000">(${escapeXml(unit)})</text>`;
+
+  const padding = 25;
+  const bottomPadding = 60;
+  const topPadding = 70;
+  const chartWidth = width - padding * 2;
+  const chartHeight = height - topPadding - bottomPadding;
+  const barWidth = chartWidth / periods.length;
+  const maxValue = Math.max(...periods.map(p => p.value), 1);
+
+  // Draw bars (gray like TariffPeriodComparisonDialog)
+  periods.forEach((period, index) => {
+    const barHeight = maxValue > 0 ? (period.value / maxValue) * chartHeight : 0;
+    const x = padding + index * barWidth;
+    const y = height - bottomPadding - barHeight;
+
+    svg += `<rect x="${x + 5}" y="${y}" width="${barWidth - 10}" height="${barHeight}" fill="#9ca3af"/>`;
+
+    // Value on top
+    if (period.value > 0) {
+      svg += `<text x="${x + barWidth / 2}" y="${y - 5}" text-anchor="middle" font-family="sans-serif" font-size="10" font-weight="bold" fill="#000000">${period.value.toLocaleString()}</text>`;
+    }
+  });
+
+  // X-axis labels
+  periods.forEach((period, index) => {
+    const x = padding + index * barWidth + barWidth / 2;
+    svg += `<text x="${x}" y="${height - bottomPadding + 15}" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#000000">${escapeXml(period.label)}</text>`;
+  });
+
+  // Percentage increases
+  if (periods.length >= 2) {
+    const firstValue = periods[0].value;
+    const lastValue = periods[periods.length - 1].value;
+
+    if (firstValue > 0) {
+      const overallIncrease = ((lastValue - firstValue) / firstValue * 100).toFixed(1);
+
+      let totalYoY = 0;
+      let validTransitions = 0;
+      for (let i = 1; i < periods.length; i++) {
+        if (periods[i - 1].value > 0) {
+          totalYoY += (periods[i].value - periods[i - 1].value) / periods[i - 1].value * 100;
+          validTransitions++;
+        }
+      }
+      const avgYoY = validTransitions > 0 ? (totalYoY / validTransitions).toFixed(1) : '0.0';
+
+      svg += `<text x="${width - 10}" y="${height - 30}" text-anchor="end" font-family="sans-serif" font-size="10" fill="#666666">Overall: +${overallIncrease}%</text>`;
+      svg += `<text x="${width - 10}" y="${height - 18}" text-anchor="end" font-family="sans-serif" font-size="10" fill="#666666">Avg YoY: +${avgYoY}%</text>`;
+    }
+  }
+
+  svg += '</svg>';
+  return svg;
+}
+
+// ==================== Document vs Assigned Chart SVG ====================
+
+/**
+ * Generate a document vs assigned comparison chart as SVG
+ * Uses consistent blue/gray color scheme
+ */
+export function generateDocumentVsAssignedChartSVG(
+  title: string,
+  unit: string,
+  data: { period: string; documentValue: number; assignedValue: number | null }[],
+  width: number = 500,
+  height: number = 320
+): string {
+  if (data.length === 0) return '';
+
+  // Colors matching reconciliation charts pattern (blue + gray)
+  const documentColor = '#3b82f6';  // Blue for Document
+  const assignedColor = 'rgba(156, 163, 175, 0.6)';  // Gray for Assigned
+
+  // Adjust width based on data points
+  const adjustedWidth = Math.max(width, 500 + (data.length - 5) * 50);
+
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${adjustedWidth}" height="${height}" viewBox="0 0 ${adjustedWidth} ${height}">`;
+  svg += `<rect width="${adjustedWidth}" height="${height}" fill="#ffffff"/>`;
+
+  // Title
+  svg += `<text x="${adjustedWidth / 2}" y="20" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="bold" fill="#000000">${escapeXml(title)}</text>`;
+  if (unit && unit.trim()) {
+    svg += `<text x="${adjustedWidth / 2}" y="35" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#000000">(${escapeXml(unit)})</text>`;
+  }
+
+  // Legend
+  const legendY = 48;
+  const legendX = adjustedWidth / 2 - 50;
+  svg += `<rect x="${legendX}" y="${legendY}" width="12" height="12" fill="${documentColor}"/>`;
+  svg += `<text x="${legendX + 16}" y="${legendY + 10}" font-family="sans-serif" font-size="10" fill="#000000">Document</text>`;
+  svg += `<rect x="${legendX + 80}" y="${legendY}" width="12" height="12" fill="${assignedColor}"/>`;
+  svg += `<text x="${legendX + 96}" y="${legendY + 10}" font-family="sans-serif" font-size="10" fill="#000000">Assigned</text>`;
+
+  const padding = 40;
+  const bottomPadding = 80;
+  const topPadding = 70;
+  const chartWidth = adjustedWidth - padding * 2;
+  const chartHeight = height - topPadding - bottomPadding;
+  const clusterWidth = chartWidth / data.length;
+  const barWidth = Math.max((clusterWidth - 8) / 2, 15);
+
+  const maxValue = Math.max(
+    ...data.map(d => d.documentValue),
+    ...data.map(d => d.assignedValue || 0),
+    1
+  );
+
+  // Draw clustered bars
+  data.forEach((item, index) => {
+    const clusterX = padding + index * clusterWidth;
+
+    // Document bar (left)
+    const docBarHeight = maxValue > 0 ? (item.documentValue / maxValue) * chartHeight : 0;
+    const docY = height - bottomPadding - docBarHeight;
+    svg += `<rect x="${clusterX + 4}" y="${docY}" width="${barWidth}" height="${docBarHeight}" fill="${documentColor}"/>`;
+
+    // Assigned bar (right)
+    const assignedValue = item.assignedValue || 0;
+    const assignedBarHeight = maxValue > 0 ? (assignedValue / maxValue) * chartHeight : 0;
+    const assignedY = height - bottomPadding - assignedBarHeight;
+    svg += `<rect x="${clusterX + barWidth + 8}" y="${assignedY}" width="${barWidth}" height="${assignedBarHeight}" fill="${assignedColor}"/>`;
+
+    // Values on top
+    if (item.documentValue > 0) {
+      svg += `<text x="${clusterX + 4 + barWidth / 2}" y="${docY - 4}" text-anchor="middle" font-family="sans-serif" font-size="10" font-weight="bold" fill="#000000">${abbreviateNumber(item.documentValue)}</text>`;
+    }
+    if (assignedValue > 0) {
+      svg += `<text x="${clusterX + barWidth + 8 + barWidth / 2}" y="${assignedY - 4}" text-anchor="middle" font-family="sans-serif" font-size="10" font-weight="bold" fill="#000000">${abbreviateNumber(assignedValue)}</text>`;
+    }
+  });
+
+  // X-axis labels (split into two lines)
+  data.forEach((item, index) => {
+    const x = padding + index * clusterWidth + clusterWidth / 2;
+    const periodParts = item.period.split(' - ');
+    svg += `<text x="${x}" y="${height - bottomPadding + 15}" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#000000">${escapeXml(periodParts[0])}</text>`;
+    if (periodParts[1]) {
+      svg += `<text x="${x}" y="${height - bottomPadding + 27}" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#000000">${escapeXml(periodParts[1])}</text>`;
+    }
+  });
+
+  svg += '</svg>';
+  return svg;
+}
+
+// ==================== Reconciliation vs Document Chart SVG ====================
+
+/**
+ * Generate a reconciliation vs document comparison chart as SVG
+ * Uses consistent gray/blue color scheme
+ */
+export function generateReconciliationVsDocumentChartSVG(
+  title: string,
+  data: { period: string; reconciliationValue: number; documentValue: number }[],
+  width: number = 500,
+  height: number = 320
+): string {
+  if (data.length === 0) return '';
+
+  // Colors - Gray for Reconciliation Cost, Blue for Document Billed
+  const reconciliationColor = 'rgba(156, 163, 175, 0.6)';  // Gray for Reconciliation Cost
+  const documentColor = '#3b82f6';  // Blue for Document Billed
+
+  // Adjust width based on data points
+  const adjustedWidth = Math.max(width, 500 + (data.length - 5) * 50);
+
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${adjustedWidth}" height="${height}" viewBox="0 0 ${adjustedWidth} ${height}">`;
+  svg += `<rect width="${adjustedWidth}" height="${height}" fill="#ffffff"/>`;
+
+  // Title
+  svg += `<text x="${adjustedWidth / 2}" y="20" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="bold" fill="#000000">${escapeXml(title)}</text>`;
+
+  // Legend
+  const legendY = 40;
+  const legendX = adjustedWidth / 2 - 70;
+  svg += `<rect x="${legendX}" y="${legendY}" width="12" height="12" fill="${reconciliationColor}"/>`;
+  svg += `<text x="${legendX + 16}" y="${legendY + 10}" font-family="sans-serif" font-size="10" fill="#000000">Reconciliation Cost</text>`;
+  svg += `<rect x="${legendX + 110}" y="${legendY}" width="12" height="12" fill="${documentColor}"/>`;
+  svg += `<text x="${legendX + 126}" y="${legendY + 10}" font-family="sans-serif" font-size="10" fill="#000000">Document Billed</text>`;
+
+  const padding = 40;
+  const bottomPadding = 80;
+  const topPadding = 65;
+  const chartWidth = adjustedWidth - padding * 2;
+  const chartHeight = height - topPadding - bottomPadding;
+  const clusterWidth = chartWidth / data.length;
+  const barWidth = Math.max((clusterWidth - 8) / 2, 15);
+
+  const maxValue = Math.max(
+    ...data.map(d => d.reconciliationValue),
+    ...data.map(d => d.documentValue),
+    1
+  );
+
+  // Draw clustered bars
+  data.forEach((item, index) => {
+    const clusterX = padding + index * clusterWidth;
+
+    // Reconciliation bar (left)
+    const reconciliationBarHeight = maxValue > 0 ? (item.reconciliationValue / maxValue) * chartHeight : 0;
+    const reconciliationY = height - bottomPadding - reconciliationBarHeight;
+    svg += `<rect x="${clusterX + 2}" y="${reconciliationY}" width="${barWidth}" height="${reconciliationBarHeight}" fill="${reconciliationColor}"/>`;
+
+    // Document bar (right)
+    const documentBarHeight = maxValue > 0 ? (item.documentValue / maxValue) * chartHeight : 0;
+    const documentY = height - bottomPadding - documentBarHeight;
+    svg += `<rect x="${clusterX + barWidth + 4}" y="${documentY}" width="${barWidth}" height="${documentBarHeight}" fill="${documentColor}"/>`;
+
+    // Values on top
+    if (item.reconciliationValue > 0) {
+      svg += `<text x="${clusterX + barWidth / 2 + 2}" y="${reconciliationY - 3}" text-anchor="middle" font-family="sans-serif" font-size="9" font-weight="bold" fill="#000000">${abbreviateNumber(item.reconciliationValue)}</text>`;
+    }
+    if (item.documentValue > 0) {
+      svg += `<text x="${clusterX + barWidth * 1.5 + 4}" y="${documentY - 3}" text-anchor="middle" font-family="sans-serif" font-size="9" font-weight="bold" fill="#000000">${abbreviateNumber(item.documentValue)}</text>`;
+    }
+  });
+
+  // X-axis labels (rotated)
+  data.forEach((item, index) => {
+    const x = padding + index * clusterWidth + clusterWidth / 2;
+    const y = height - bottomPadding + 10;
+    svg += `<text x="${x}" y="${y}" text-anchor="end" font-family="sans-serif" font-size="9" fill="#000000" transform="rotate(-45 ${x} ${y})">${escapeXml(item.period)}</text>`;
+  });
+
+  // Percentage increases
+  if (data.length >= 2) {
+    const firstValue = data[0].reconciliationValue;
+    const lastValue = data[data.length - 1].reconciliationValue;
+
+    if (firstValue > 0) {
+      const overallIncreaseNum = ((lastValue - firstValue) / firstValue * 100);
+      const overallIncrease = overallIncreaseNum.toFixed(1);
+
+      let totalYoY = 0;
+      let validTransitions = 0;
+      for (let i = 1; i < data.length; i++) {
+        if (data[i - 1].reconciliationValue > 0) {
+          totalYoY += (data[i].reconciliationValue - data[i - 1].reconciliationValue) / data[i - 1].reconciliationValue * 100;
+          validTransitions++;
+        }
+      }
+
+      if (validTransitions > 0) {
+        const avgYoYNum = (totalYoY / validTransitions);
+        const avgYoY = avgYoYNum.toFixed(1);
+        svg += `<text x="${adjustedWidth - 10}" y="${height - 30}" text-anchor="end" font-family="sans-serif" font-size="10" fill="#666666">Overall: ${overallIncreaseNum >= 0 ? '+' : ''}${overallIncrease}%</text>`;
+        svg += `<text x="${adjustedWidth - 10}" y="${height - 18}" text-anchor="end" font-family="sans-serif" font-size="10" fill="#666666">Avg YoY: ${avgYoYNum >= 0 ? '+' : ''}${avgYoY}%</text>`;
+      }
+    }
+  }
+
+  svg += '</svg>';
+  return svg;
+}
+
+// ==================== Tariff Analysis Chart SVG (Document with seasonal averages) ====================
+
+/**
+ * Generate a tariff analysis chart with document amounts and seasonal average lines as SVG
+ */
+export function generateTariffAnalysisChartSVG(
+  title: string,
+  unit: string,
+  data: { period: string; value: number; winterAvg?: number; summerAvg?: number }[],
+  width: number = 500,
+  height: number = 320
+): string {
+  if (data.length === 0) return '';
+
+  const barColor = '#9ca3af';  // Gray bars
+  const winterLineColor = '#3b82f6';  // Blue line
+  const summerLineColor = '#f97316';  // Orange line
+
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`;
+  svg += `<rect width="${width}" height="${height}" fill="#ffffff"/>`;
+
+  // Title
+  svg += `<text x="${width / 2}" y="25" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="#000000">${escapeXml(title)}</text>`;
+  if (unit && unit.trim()) {
+    svg += `<text x="${width / 2}" y="42" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#000000">(${escapeXml(unit)})</text>`;
+  }
+
+  // Legend
+  const legendY = 55;
+  const legendSpacing = 110;
+  let legendX = width / 2 - legendSpacing;
+
+  svg += `<rect x="${legendX}" y="${legendY}" width="12" height="12" fill="${barColor}"/>`;
+  svg += `<text x="${legendX + 16}" y="${legendY + 10}" font-family="sans-serif" font-size="10" fill="#000000">Amount</text>`;
+
+  legendX += legendSpacing;
+  svg += `<line x1="${legendX}" y1="${legendY + 6}" x2="${legendX + 12}" y2="${legendY + 6}" stroke="${winterLineColor}" stroke-width="2"/>`;
+  svg += `<text x="${legendX + 16}" y="${legendY + 10}" font-family="sans-serif" font-size="10" fill="#000000">Winter Avg</text>`;
+
+  legendX += legendSpacing;
+  svg += `<line x1="${legendX}" y1="${legendY + 6}" x2="${legendX + 12}" y2="${legendY + 6}" stroke="${summerLineColor}" stroke-width="2"/>`;
+  svg += `<text x="${legendX + 16}" y="${legendY + 10}" font-family="sans-serif" font-size="10" fill="#000000">Summer Avg</text>`;
+
+  const padding = 50;
+  const bottomPadding = 100;
+  const topPadding = 80;
+  const chartWidth = width - padding * 2;
+  const chartHeight = height - topPadding - bottomPadding;
+  const barWidth = Math.max((chartWidth / data.length) * 0.6, 20);
+  const barSpacing = chartWidth / data.length;
+
+  const maxValue = Math.max(...data.map(d => d.value), 1);
+  const scale = chartHeight / maxValue;
+
+  // Draw bars
+  data.forEach((item, index) => {
+    const barHeight = item.value * scale;
+    const x = padding + index * barSpacing + (barSpacing - barWidth) / 2;
+    const y = topPadding + chartHeight - barHeight;
+
+    svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" fill="${barColor}"/>`;
+
+    // Value on top
+    if (item.value > 0) {
+      svg += `<text x="${x + barWidth / 2}" y="${y - 3}" text-anchor="middle" font-family="sans-serif" font-size="9" font-weight="bold" fill="#000000">${abbreviateNumber(item.value)}</text>`;
+    }
+  });
+
+  // Draw winter average line
+  if (data.some(d => d.winterAvg !== undefined)) {
+    let linePath = '';
+    let isFirst = true;
+    data.forEach((item, index) => {
+      if (item.winterAvg !== undefined) {
+        const x = padding + index * barSpacing + barSpacing / 2;
+        const y = topPadding + chartHeight - (item.winterAvg * scale);
+        linePath += isFirst ? `M${x},${y}` : ` L${x},${y}`;
+        isFirst = false;
+      }
+    });
+    if (linePath) {
+      svg += `<path d="${linePath}" fill="none" stroke="${winterLineColor}" stroke-width="2"/>`;
+    }
+  }
+
+  // Draw summer average line
+  if (data.some(d => d.summerAvg !== undefined)) {
+    let linePath = '';
+    let isFirst = true;
+    data.forEach((item, index) => {
+      if (item.summerAvg !== undefined) {
+        const x = padding + index * barSpacing + barSpacing / 2;
+        const y = topPadding + chartHeight - (item.summerAvg * scale);
+        linePath += isFirst ? `M${x},${y}` : ` L${x},${y}`;
+        isFirst = false;
+      }
+    });
+    if (linePath) {
+      svg += `<path d="${linePath}" fill="none" stroke="${summerLineColor}" stroke-width="2"/>`;
+    }
+  }
+
+  // X-axis labels (rotated)
+  data.forEach((item, index) => {
+    const x = padding + index * barSpacing + barSpacing / 2;
+    const y = topPadding + chartHeight + 10;
+    svg += `<text x="${x}" y="${y}" text-anchor="end" font-family="sans-serif" font-size="9" fill="#000000" transform="rotate(-45 ${x} ${y})">${escapeXml(item.period)}</text>`;
+  });
+
+  svg += '</svg>';
+  return svg;
+}

@@ -1,6 +1,17 @@
 /**
- * Canvas-based chart rendering utilities
- * These functions generate chart images directly using Canvas API
+ * @deprecated Canvas-based chart rendering utilities
+ * 
+ * These functions are deprecated and kept only for backward compatibility.
+ * Use the SVG-based functions from svgRenderer.ts instead:
+ * - generateBarChartSVG
+ * - generateComboChartSVG
+ * - generateReconciliationMeterChartSVG
+ * - etc.
+ * 
+ * SVG charts provide:
+ * - Perfect quality at any resolution
+ * - Smaller file sizes
+ * - Consistent rendering across devices
  */
 
 import type { ChartDataPoint, ChartRenderOptions } from './types';
