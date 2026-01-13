@@ -1595,44 +1595,52 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         const billingComparisonCharts = (previewData as any).billingComparisonCharts;
         if (billingComparisonCharts && Object.keys(billingComparisonCharts).length > 0) {
           const billingMeterIds = Object.keys(billingComparisonCharts);
-          for (let meterIndex = 0; meterIndex < billingMeterIds.length; meterIndex++) {
-            const meterId = billingMeterIds[meterIndex];
-            const meterChartData = billingComparisonCharts[meterId];
-            
-            // Start each meter on a new page (except first meter which follows section heading)
-            if (meterIndex > 0) {
+          
+          // Group meters in pairs (2 meters per page)
+          for (let pairIndex = 0; pairIndex < billingMeterIds.length; pairIndex += 2) {
+            // Start new page for each pair of meters (except first pair which follows section heading)
+            if (pairIndex > 0) {
               addFooter();
               addPageNumber();
               pdf.addPage();
               yPos = topMargin;
             }
             
-            addSubsectionHeading(`Meter: ${meterChartData.meterNumber}${meterChartData.meterName ? ` (${meterChartData.meterName})` : ''}`);
-            addSpacer(3);
-            
-            // Render charts in rows of 2 for better readability
-            const chartEntries = Object.entries(meterChartData.charts || {});
-            const chartWidth = (pageWidth - leftMargin - rightMargin - 5) / 2;
-            const chartHeight = chartWidth * 0.75;
-            
-            for (let i = 0; i < chartEntries.length; i += 2) {
-              // Check for page break
-              if (yPos > pageHeight - bottomMargin - chartHeight - 20) {
-                addFooter();
-                addPageNumber();
-                pdf.addPage();
-                yPos = topMargin;
+            // Process up to 2 meters on this page
+            for (let meterOffset = 0; meterOffset < 2 && (pairIndex + meterOffset) < billingMeterIds.length; meterOffset++) {
+              const meterId = billingMeterIds[pairIndex + meterOffset];
+              const meterChartData = billingComparisonCharts[meterId];
+              
+              addSubsectionHeading(`Meter: ${meterChartData.meterNumber}${meterChartData.meterName ? ` (${meterChartData.meterName})` : ''}`);
+              addSpacer(2);
+              
+              // Render charts in rows of 2 for better readability
+              const chartEntries = Object.entries(meterChartData.charts || {});
+              const chartWidth = (pageWidth - leftMargin - rightMargin - 5) / 2;
+              const chartHeight = chartWidth * 0.6; // Smaller height to fit 2 meters per page
+              
+              for (let i = 0; i < chartEntries.length; i += 2) {
+                // Check for page break
+                if (yPos > pageHeight - bottomMargin - chartHeight - 15) {
+                  addFooter();
+                  addPageNumber();
+                  pdf.addPage();
+                  yPos = topMargin;
+                }
+                
+                // Render up to 2 charts per row
+                for (let j = 0; j < 2 && (i + j) < chartEntries.length; j++) {
+                  const [metricTitle, chartImage] = chartEntries[i + j];
+                  if (chartImage) {
+                    const chartX = leftMargin + (j * (chartWidth + 5));
+                    await addImageSafe(chartImage as string, chartX, yPos, chartWidth - 2, chartHeight);
+                  }
+                }
+                yPos += chartHeight + 2;
               }
               
-              // Render up to 2 charts per row
-              for (let j = 0; j < 2 && (i + j) < chartEntries.length; j++) {
-                const [metricTitle, chartImage] = chartEntries[i + j];
-                if (chartImage) {
-                  const chartX = leftMargin + (j * (chartWidth + 5));
-                  await addImageSafe(chartImage as string, chartX, yPos, chartWidth - 2, chartHeight);
-                }
-              }
-              yPos += chartHeight + 2;
+              // Add small spacing between meters on same page
+              addSpacer(4);
             }
           }
         } else {
