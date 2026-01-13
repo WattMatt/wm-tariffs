@@ -1392,35 +1392,54 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         const rateComparisonCharts = (previewData as any).rateComparisonCharts;
         if (rateComparisonCharts && Object.keys(rateComparisonCharts).length > 0) {
-          for (const meterId of Object.keys(rateComparisonCharts)) {
+          const meterIds = Object.keys(rateComparisonCharts);
+          const metersPerPage = 2;
+          
+          // Calculate dimensions for condensed layout (2 meters per page, 2x2 charts each)
+          const contentWidth = pageWidth - leftMargin - rightMargin;
+          const chartSpacing = 4;
+          const chartWidth = (contentWidth - chartSpacing) / 2;
+          const chartHeight = chartWidth * 0.55; // More compact aspect ratio
+          const meterBlockHeight = (chartHeight * 2) + chartSpacing + 20; // 2 rows of charts + heading
+          
+          for (let meterIdx = 0; meterIdx < meterIds.length; meterIdx++) {
+            const meterId = meterIds[meterIdx];
             const meterChartData = rateComparisonCharts[meterId];
+            const meterPositionOnPage = meterIdx % metersPerPage;
             
+            // Start new page for every 2 meters (except first)
+            if (meterIdx > 0 && meterPositionOnPage === 0) {
+              addFooter();
+              addPageNumber();
+              pdf.addPage();
+              yPos = topMargin;
+            }
+            
+            // Check if we need page break for this meter block
+            if (yPos + meterBlockHeight > pageHeight - bottomMargin) {
+              addFooter();
+              addPageNumber();
+              pdf.addPage();
+              yPos = topMargin;
+            }
+            
+            // Add meter subheading
             addSubsectionHeading(`Meter: ${meterChartData.meterNumber}${meterChartData.meterName ? ` (${meterChartData.meterName})` : ''}`);
-            addSpacer(3);
+            addSpacer(2);
             
-            // Render charts in rows of 2 for better readability
-            const chartEntries = Object.entries(meterChartData.charts || {});
-            const chartWidth = (pageWidth - leftMargin - rightMargin - 5) / 2;
-            const chartHeight = chartWidth * 0.75;
+            // Render charts in 2x2 grid (max 4 charts per meter in compact view)
+            const chartEntries = Object.entries(meterChartData.charts || {}).slice(0, 4); // Limit to 4 charts
             
             for (let i = 0; i < chartEntries.length; i += 2) {
-              // Check for page break
-              if (yPos > pageHeight - bottomMargin - chartHeight - 20) {
-                addFooter();
-                addPageNumber();
-                pdf.addPage();
-                yPos = topMargin;
-              }
-              
               // Render up to 2 charts per row
               for (let j = 0; j < 2 && (i + j) < chartEntries.length; j++) {
                 const [chargeType, chartImage] = chartEntries[i + j];
                 if (chartImage) {
-                  const chartX = leftMargin + (j * (chartWidth + 5));
-                  await addImageSafe(chartImage as string, chartX, yPos, chartWidth - 2, chartHeight);
+                  const chartX = leftMargin + (j * (chartWidth + chartSpacing));
+                  await addImageSafe(chartImage as string, chartX, yPos, chartWidth, chartHeight);
                 }
               }
-              yPos += chartHeight + 5;
+              yPos += chartHeight + chartSpacing;
             }
             
             addSpacer(5);
