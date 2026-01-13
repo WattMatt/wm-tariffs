@@ -1430,7 +1430,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             // Render charts in 2x2 grid (always 4 positions for consistent layout)
             const chartEntries = Object.entries(meterChartData.charts || {}).slice(0, 4);
             
-            // Always render 2 rows of 2 charts (4 total positions)
+            // Always render 2 rows of 2 charts (4 total positions) - empty positions reserve space without visible placeholder
             for (let row = 0; row < 2; row++) {
               for (let col = 0; col < 2; col++) {
                 const chartIndex = row * 2 + col;
@@ -1440,26 +1440,10 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                   const [chargeType, chartImage] = chartEntries[chartIndex];
                   if (chartImage) {
                     await addImageSafe(chartImage as string, chartX, yPos, chartWidth, chartHeight);
-                  } else {
-                    // Draw placeholder for missing chart image
-                    pdf.setDrawColor(200, 200, 200);
-                    pdf.setFillColor(248, 248, 248);
-                    pdf.roundedRect(chartX, yPos, chartWidth, chartHeight, 2, 2, 'FD');
-                    pdf.setFontSize(8);
-                    pdf.setTextColor(150, 150, 150);
-                    pdf.text('No chart data', chartX + chartWidth / 2, yPos + chartHeight / 2, { align: 'center' });
-                    pdf.setTextColor(0, 0, 0);
                   }
-                } else {
-                  // Draw placeholder for empty position
-                  pdf.setDrawColor(200, 200, 200);
-                  pdf.setFillColor(248, 248, 248);
-                  pdf.roundedRect(chartX, yPos, chartWidth, chartHeight, 2, 2, 'FD');
-                  pdf.setFontSize(8);
-                  pdf.setTextColor(150, 150, 150);
-                  pdf.text('No chart available', chartX + chartWidth / 2, yPos + chartHeight / 2, { align: 'center' });
-                  pdf.setTextColor(0, 0, 0);
+                  // If chartImage is null/undefined, just skip - space is reserved
                 }
+                // Empty positions: just skip drawing, space is reserved by yPos increment
               }
               yPos += chartHeight + chartSpacing;
             }
