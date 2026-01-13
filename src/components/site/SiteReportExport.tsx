@@ -968,16 +968,16 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           }
           
           // Draw header with blue background
-          const rowHeight = 5.5; // Ultra-compact row height for 2 tables per page
+          const rowHeight = 7; // Compact row height
           pdf.setFillColor(templateBlue[0], templateBlue[1], templateBlue[2]);
           pdf.rect(leftMargin, yPos, tableWidth, rowHeight, "F");
           
-          pdf.setFontSize(7); // Ultra-compact font size
+          pdf.setFontSize(8); // Compact font size
           pdf.setFont("helvetica", "bold");
           pdf.setTextColor(255, 255, 255);
           let xPos = leftMargin + 2;
           headers.forEach((header, i) => {
-            pdf.text(sanitizeForPdf(header), xPos, yPos + 4); // Adjusted vertical position
+            pdf.text(sanitizeForPdf(header), xPos, yPos + 5); // Adjusted vertical position
             xPos += colWidths[i];
           });
           pdf.setTextColor(0, 0, 0);
@@ -1000,11 +1000,10 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             }
             
             xPos = leftMargin + 2;
-            pdf.setFontSize(7); // Ultra-compact font
             row.forEach((cell, i) => {
               const sanitizedCell = sanitizeForPdf(cell);
               const cellLines = pdf.splitTextToSize(sanitizedCell, colWidths[i] - 4);
-              pdf.text(cellLines[0] || "", xPos, yPos + 4); // Adjusted vertical position
+              pdf.text(cellLines[0] || "", xPos, yPos + 5); // Adjusted vertical position
               xPos += colWidths[i];
             });
             
@@ -2883,18 +2882,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           // Collect chart data by charge type as we build the table
           const chartDataByType: Record<string, Array<{period: string; documentValue: number; assignedValue: number | null}>> = {};
           
-          // Build table content separately - limit to latest 4 periods for condensed view
+          // Build table content separately
           let tableContent = '| Period | Item | Document | Assigned | Variance |\n';
           tableContent += '|--------|------|----------|----------|----------|\n';
           
-          // Sort documents by date (newest first) and limit to 4 periods
-          const sortedDocs = [...meterComparisonData.documents].sort((a, b) => {
-            const dateA = new Date(a.periodEnd || a.periodStart || 0);
-            const dateB = new Date(b.periodEnd || b.periodStart || 0);
-            return dateB.getTime() - dateA.getTime();
-          }).slice(0, 4);
-          
-          for (const doc of sortedDocs) {
+          for (const doc of meterComparisonData.documents) {
             const periodStart = doc.periodStart ? format(new Date(doc.periodStart), "MMM yyyy") : 'N/A';
             const periodEnd = doc.periodEnd ? format(new Date(doc.periodEnd), "MMM yyyy") : 'N/A';
             const period = `${periodStart} - ${periodEnd}`;
@@ -2910,34 +2902,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                 
                 tableContent += `| ${period} | ${item.chargeType} (${item.unit}) | ${docVal} | ${assignedVal} | ${varPercent} |\n`;
                 
-                // Collect data for charts (only if both values exist) - use ALL docs for charts
-                if (item.documentValue != null && item.assignedValue != null) {
-                  const chartKey = `${item.chargeType} (${item.unit})`;
-                  if (!chartDataByType[chartKey]) {
-                    chartDataByType[chartKey] = [];
-                  }
-                  chartDataByType[chartKey].push({
-                    period,
-                    documentValue: item.documentValue,
-                    assignedValue: item.assignedValue
-                  });
-                }
-              }
-            }
-          }
-          
-          // Also collect chart data from all documents (not just limited 4)
-          for (const doc of meterComparisonData.documents) {
-            const periodStart = doc.periodStart ? format(new Date(doc.periodStart), "MMM yyyy") : 'N/A';
-            const periodEnd = doc.periodEnd ? format(new Date(doc.periodEnd), "MMM yyyy") : 'N/A';
-            const period = `${periodStart} - ${periodEnd}`;
-            
-            // Skip if already processed in sortedDocs
-            if (sortedDocs.includes(doc)) continue;
-            
-            if (doc.lineItems && Array.isArray(doc.lineItems)) {
-              for (const item of doc.lineItems) {
-                if (item.supply === 'Emergency') continue;
+                // Collect data for charts (only if both values exist)
                 if (item.documentValue != null && item.assignedValue != null) {
                   const chartKey = `${item.chargeType} (${item.unit})`;
                   if (!chartDataByType[chartKey]) {
