@@ -1535,11 +1535,21 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
         const tariffAnalysisCharts = (previewData as any).tariffAnalysisCharts;
         if (tariffAnalysisCharts && Object.keys(tariffAnalysisCharts).length > 0) {
-          for (const meterId of Object.keys(tariffAnalysisCharts)) {
+          const meterIds = Object.keys(tariffAnalysisCharts);
+          for (let meterIndex = 0; meterIndex < meterIds.length; meterIndex++) {
+            const meterId = meterIds[meterIndex];
             const meterCharts = tariffAnalysisCharts[meterId];
             const meter = meterData.find(m => m.id === meterId);
             
             if (!meter) continue;
+            
+            // Start each meter on a new page (except first meter which follows section heading)
+            if (meterIndex > 0) {
+              addFooter();
+              addPageNumber();
+              pdf.addPage();
+              yPos = topMargin;
+            }
             
             // Add meter subheading
             addSubsectionHeading(`Meter: ${meter.meter_number}${meter.name ? ` (${meter.name})` : ''}`);
@@ -1586,8 +1596,18 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         const billingComparisonCharts = (previewData as any).billingComparisonCharts;
         if (billingComparisonCharts && Object.keys(billingComparisonCharts).length > 0) {
-          for (const meterId of Object.keys(billingComparisonCharts)) {
+          const billingMeterIds = Object.keys(billingComparisonCharts);
+          for (let meterIndex = 0; meterIndex < billingMeterIds.length; meterIndex++) {
+            const meterId = billingMeterIds[meterIndex];
             const meterChartData = billingComparisonCharts[meterId];
+            
+            // Start each meter on a new page (except first meter which follows section heading)
+            if (meterIndex > 0) {
+              addFooter();
+              addPageNumber();
+              pdf.addPage();
+              yPos = topMargin;
+            }
             
             addSubsectionHeading(`Meter: ${meterChartData.meterNumber}${meterChartData.meterName ? ` (${meterChartData.meterName})` : ''}`);
             addSpacer(3);
