@@ -3211,6 +3211,58 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         }
       }
 
+      // Generate period summaries for each reconciliation run
+      const generatePeriodSummaries = () => {
+        if (!allReconciliations || allReconciliations.length === 0) {
+          return '';
+        }
+        
+        return allReconciliations.map((run: any) => {
+          const runDate = run.run_name || `${format(new Date(run.date_from), "dd MMM yyyy")} - ${format(new Date(run.date_to), "dd MMM yyyy")}`;
+          const periodStart = format(new Date(run.date_from), "dd MMM yyyy");
+          const periodEnd = format(new Date(run.date_to), "dd MMM yyyy");
+          
+          // Calculate common area kWh (other type meters) for this run
+          const otherMeters = run.reconciliation_meter_results?.filter((m: any) => m.meter_type === 'other') || [];
+          const commonAreaKwh = otherMeters.reduce((sum: number, m: any) => sum + (m.total_kwh || 0), 0);
+          
+          // Calculate unaccounted loss
+          const unaccountedLoss = run.total_supply - run.tenant_total - commonAreaKwh;
+          const unaccountedPercent = run.total_supply > 0 ? (unaccountedLoss / run.total_supply) * 100 : 0;
+          
+          // Energy summary
+          const gridPercent = run.total_supply > 0 ? (run.bulk_total / run.total_supply) * 100 : 0;
+          const solarPercent = run.total_supply > 0 ? (run.solar_total / run.total_supply) * 100 : 0;
+          const tenantPercent = run.total_supply > 0 ? (run.tenant_total / run.total_supply) * 100 : 0;
+          const commonAreaPercent = run.total_supply > 0 ? (commonAreaKwh / run.total_supply) * 100 : 0;
+          
+          return `#### ${runDate}
+*Period: ${periodStart} - ${periodEnd}*
+
+**Energy Summary**
+
+| Metric | Value | % of Total |
+|--------|-------|------------|
+| Grid Supply | ${formatNumber(run.bulk_total)} kWh | ${formatNumber(gridPercent)}% |
+| Solar Energy | ${formatNumber(run.solar_total)} kWh | ${formatNumber(solarPercent)}% |
+| **Total Supply** | **${formatNumber(run.total_supply)} kWh** | **100.00%** |
+| Metered Consumption | ${formatNumber(run.tenant_total)} kWh | ${formatNumber(tenantPercent)}% |
+| Common Area | ${formatNumber(commonAreaKwh)} kWh | ${formatNumber(commonAreaPercent)}% |
+| Unaccounted Loss | ${formatNumber(unaccountedLoss)} kWh | ${formatNumber(unaccountedPercent)}% |
+
+${run.revenue_enabled ? `**Revenue Summary**
+
+| Metric | Value |
+|--------|-------|
+| Grid Supply Cost | R ${formatNumber(run.grid_supply_cost || 0)} |
+| Solar Revenue | R ${formatNumber(run.solar_cost || 0)} |
+| Tenant Revenue | R ${formatNumber(run.total_revenue || 0)} |
+| Total Revenue | R ${formatNumber((run.grid_supply_cost || 0) + (run.solar_cost || 0) + (run.total_revenue || 0))} |
+| Avg Cost/kWh | R ${formatNumber(run.avg_cost_per_kwh || 0, 4)} |
+` : ''}`;
+        }).join('\n\n---\n\n');
+      };
+
       const reportData = {
         clientName: siteDetails.clientName,
         sections: {
@@ -3225,8 +3277,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 | Solar Generation | ${formatNumber(selectedReconciliation.solar_total)} kWh |
 | Total Supply | ${formatNumber(selectedReconciliation.total_supply)} kWh |
 | Distribution | ${formatNumber(selectedReconciliation.tenant_total)} kWh |
-| Variance | ${formatNumber(selectedReconciliation.discrepancy)} kWh (${formatNumber((selectedReconciliation.discrepancy / selectedReconciliation.total_supply) * 100)}%) |
-| Recovery Rate | ${formatNumber(selectedReconciliation.recovery_rate)}% |`,
+| Variance | ${formatNumber(selectedReconciliation.discrepancy)} kWh (${selectedReconciliation.total_supply > 0 ? formatNumber((selectedReconciliation.discrepancy / selectedReconciliation.total_supply) * 100) : '0.00'}%) |
+| Recovery Rate | ${formatNumber(selectedReconciliation.recovery_rate)}% |
+
+### Period Breakdowns
+
+${generatePeriodSummaries()}`,
 
           siteInfrastructure: `### Meter Summary
 
