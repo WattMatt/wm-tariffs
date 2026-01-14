@@ -10,7 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, FileText, Upload, Eye, Trash2 } from "lucide-react";
+import { Plus, FileText, Upload, Eye, Trash2, RefreshCw } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Schematic, getFileTypeIcon } from "@/types/schematic";
@@ -35,6 +35,11 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [schematicName, setSchematicName] = useState("");
   const [isNameManuallyEdited, setIsNameManuallyEdited] = useState(false);
+  const [replaceDialogOpen, setReplaceDialogOpen] = useState(false);
+  const [schematicToReplace, setSchematicToReplace] = useState<Schematic | null>(null);
+  const [replaceFile, setReplaceFile] = useState<File | null>(null);
+  const [isReplacing, setIsReplacing] = useState(false);
+  const [isReplaceDragging, setIsReplaceDragging] = useState(false);
 
   useEffect(() => {
     fetchSchematics();
@@ -387,6 +392,142 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
     }
   };
 
+  const handleReplaceClick = (schematic: Schematic) => {
+    setSchematicToReplace(schematic);
+    setReplaceFile(null);
+    setReplaceDialogOpen(true);
+  };
+
+  const handleReplaceFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const validTypes = ["application/pdf", "image/png", "image/jpeg", "image/svg+xml"];
+      if (!validTypes.includes(file.type)) {
+        toast.error("Invalid file type. Please upload PDF, PNG, JPG, or SVG");
+        return;
+      }
+      if (file.size > 52428800) {
+        toast.error("File size must be less than 50MB");
+        return;
+      }
+      setReplaceFile(file);
+    }
+  };
+
+  const handleReplaceDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsReplaceDragging(false);
+    
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      const validTypes = ["application/pdf", "image/png", "image/jpeg", "image/svg+xml"];
+      
+      if (!validTypes.includes(file.type)) {
+        toast.error("Invalid file type. Please upload PDF, PNG, JPG, or SVG");
+        return;
+      }
+      
+      if (file.size > 52428800) {
+        toast.error("File size must be less than 50MB");
+        return;
+      }
+      
+      setReplaceFile(file);
+    }
+  };
+
+  const handleReplaceConfirm = async () => {
+    if (!schematicToReplace || !replaceFile) return;
+
+    setIsReplacing(true);
+
+    try {
+      const timestamp = Date.now();
+      const fileName = `${timestamp}-${replaceFile.name}`;
+      
+      // Generate hierarchical storage path
+      const { generateStoragePath } = await import("@/lib/storagePaths");
+      const { bucket, path: newFilePath } = await generateStoragePath(siteId, 'Metering', 'Schematics', fileName);
+      
+      // Upload the new file
+      const { error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(newFilePath, replaceFile);
+
+      if (uploadError) throw uploadError;
+
+      // Delete old files from storage
+      const filesToDelete = [schematicToReplace.file_path];
+      if (schematicToReplace.converted_image_path) {
+        filesToDelete.push(schematicToReplace.converted_image_path);
+      }
+
+      await supabase.storage
+        .from("client-files")
+        .remove(filesToDelete);
+
+      // Update the schematic record (preserving all other data like meter positions)
+      const { error: updateError } = await supabase
+        .from("schematics")
+        .update({
+          file_path: newFilePath,
+          file_type: replaceFile.type,
+          converted_image_path: null, // Reset converted image, will be regenerated
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", schematicToReplace.id);
+
+      if (updateError) throw updateError;
+
+      toast.success("Schematic image replaced successfully. All meter positions and data preserved.");
+      
+      // Auto-convert PDF to image if needed
+      if (replaceFile.type === "application/pdf") {
+        toast.info("Converting PDF to image for faster viewing...");
+        
+        try {
+          const { convertPdfFileToImage } = await import('@/lib/pdfConversion');
+          const { blob } = await convertPdfFileToImage(replaceFile, { scale: 2.0 });
+          
+          const convertedImageName = `${timestamp}-${replaceFile.name.replace('.pdf', '')}_converted.png`;
+          const { path: convertedImagePath } = await generateStoragePath(siteId, 'Metering', 'Schematics', convertedImageName);
+          
+          const { error: convUploadError } = await supabase.storage
+            .from(bucket)
+            .upload(convertedImagePath, blob, {
+              contentType: 'image/png',
+            });
+          
+          if (convUploadError) throw convUploadError;
+          
+          const { error: convUpdateError } = await supabase
+            .from('schematics')
+            .update({ converted_image_path: convertedImagePath })
+            .eq('id', schematicToReplace.id);
+          
+          if (convUpdateError) throw convUpdateError;
+          
+          toast.success('PDF converted to image successfully');
+        } catch (conversionError: any) {
+          console.error('PDF conversion failed:', conversionError);
+          toast.error('PDF conversion failed, but file is uploaded');
+        }
+      }
+
+      setReplaceDialogOpen(false);
+      setSchematicToReplace(null);
+      setReplaceFile(null);
+      fetchSchematics();
+    } catch (error: any) {
+      console.error("Error replacing schematic:", error);
+      toast.error(error.message || "Failed to replace schematic image");
+    } finally {
+      setIsReplacing(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -610,14 +751,24 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
                           variant="outline"
                           size="icon"
                           onClick={() => navigate(`/schematics/${schematic.id}`)}
+                          title="View schematic"
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="icon"
+                          onClick={() => handleReplaceClick(schematic)}
+                          title="Replace image (preserves meter data)"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
                           onClick={() => handleDeleteClick(schematic)}
                           className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          title="Delete schematic"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -657,6 +808,87 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Replace Image Dialog */}
+        <Dialog open={replaceDialogOpen} onOpenChange={(open) => {
+          setReplaceDialogOpen(open);
+          if (!open) {
+            setSchematicToReplace(null);
+            setReplaceFile(null);
+          }
+        }}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Replace Schematic Image</DialogTitle>
+              <DialogDescription>
+                Upload a new image for "{schematicToReplace?.name}". All meter positions, connections, and other data will be preserved.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3">
+                <p className="text-sm text-amber-700 dark:text-amber-300">
+                  <strong>Note:</strong> Meter positions are stored as percentages relative to the image. For best results, use an image with similar dimensions to the original.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>New Image File</Label>
+                <Label 
+                  htmlFor="replace-file"
+                  className={`block border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
+                    isReplaceDragging 
+                      ? 'border-primary bg-primary/5' 
+                      : 'border-border hover:border-primary'
+                  }`}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setIsReplaceDragging(true); }}
+                  onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsReplaceDragging(false); }}
+                  onDrop={handleReplaceDrop}
+                >
+                  <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                  <Input
+                    id="replace-file"
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg,.svg"
+                    onChange={handleReplaceFileChange}
+                    className="hidden"
+                  />
+                  <div className="text-sm text-muted-foreground">
+                    {replaceFile ? (
+                      <div className="text-primary font-medium">
+                        {replaceFile.name}
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {(replaceFile.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <span className="text-primary font-medium">Click to upload</span> or drag and drop
+                        <p className="text-xs mt-1">PDF, PNG, JPG, SVG (max 50MB)</p>
+                      </div>
+                    )}
+                  </div>
+                </Label>
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setReplaceDialogOpen(false)}
+                  disabled={isReplacing}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleReplaceConfirm}
+                  disabled={!replaceFile || isReplacing}
+                >
+                  {isReplacing ? "Replacing..." : "Replace Image"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
