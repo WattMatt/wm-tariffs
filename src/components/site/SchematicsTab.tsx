@@ -10,7 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, FileText, Upload, Eye, Trash2, RefreshCw } from "lucide-react";
+import { Plus, FileText, Upload, Eye, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Schematic, getFileTypeIcon } from "@/types/schematic";
@@ -761,7 +761,7 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
                           onClick={() => handleReplaceClick(schematic)}
                           title="Replace image (preserves meter data)"
                         >
-                          <RefreshCw className="w-4 h-4" />
+                          <Upload className="w-4 h-4" />
                         </Button>
                         <Button
                           variant="outline"
