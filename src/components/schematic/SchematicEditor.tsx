@@ -4025,14 +4025,15 @@ export default function SchematicEditor({
       const backgroundObj = fabricCanvas.getObjects().find((obj: any) => obj.isBackgroundImage);
       const originalBackgroundVisible = backgroundObj ? backgroundObj.visible : true;
       
-      // 2. Hide snippet rectangle before capture
+      // 2. Hide snippet rectangle before capture (so it doesn't appear in the captured image)
       if (snippetRectRef.current) {
         snippetRectRef.current.visible = false;
       }
       
-      // 3. Hide background image temporarily
+      // 3. IMPORTANT: Keep background image VISIBLE so it's included in the snippet capture!
+      // The snippet should include the schematic background with all overlays on top
       if (backgroundObj) {
-        backgroundObj.visible = false;
+        backgroundObj.visible = true;  // Ensure background is visible for capture
       }
       
       // 4. Render canvas to apply visibility changes
