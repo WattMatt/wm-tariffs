@@ -2653,18 +2653,13 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               const canvas = document.createElement('canvas');
               const ctx = canvas.getContext('2d');
               
-              // Set max dimensions (reduce resolution significantly for PDF)
-              const maxWidth = 1200;
-              const maxHeight = 800;
-              let width = img.width;
-              let height = img.height;
+              // Use the FULL original image dimensions - do NOT crop or reduce
+              // The image will be scaled to fit the PDF page during rendering
+              // This ensures all meters and content are captured completely
+              const width = img.width;
+              const height = img.height;
               
-              // Calculate new dimensions maintaining aspect ratio
-              if (width > maxWidth || height > maxHeight) {
-                const ratio = Math.min(maxWidth / width, maxHeight / height);
-                width = width * ratio;
-                height = height * ratio;
-              }
+              console.log(`Loading schematic image at full resolution: ${width}x${height}`);
               
               canvas.width = width;
               canvas.height = height;
@@ -2675,7 +2670,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                 ctx.fillRect(0, 0, width, height);
               }
               
-              // Draw image on top of white background - PNG for lossless quality
+              // Draw image at FULL resolution - no cropping, no scaling
               ctx?.drawImage(img, 0, 0, width, height);
               schematicImageBase64 = canvas.toDataURL('image/png');
               
