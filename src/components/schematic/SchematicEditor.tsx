@@ -4035,31 +4035,34 @@ export default function SchematicEditor({
         backgroundObj.visible = false;
       }
       
-      // 4. Render canvas to apply visibility changes
+      // 4. Store current viewport transform to restore later
+      const originalVPT = fabricCanvas.viewportTransform ? [...fabricCanvas.viewportTransform] : [1, 0, 0, 1, 0, 0];
+      const originalZoom = fabricCanvas.getZoom();
+      
+      // 5. Reset viewport to 1:1 for accurate capture (fixes coordinate mismatch)
+      fabricCanvas.viewportTransform = [1, 0, 0, 1, 0, 0];
+      fabricCanvas.setZoom(1);
       fabricCanvas.renderAll();
       
-      // 5. Get current bounds using the rectangle's actual canvas coordinates
+      // 6. Get the rectangle's canvas coordinates (not viewport coordinates)
       let captureRect = snippetRect;
       if (snippetRectRef.current) {
         const rect = snippetRectRef.current;
-        // Get the bounding rect which gives us the actual rendered position and size
-        const bounds = rect.getBoundingRect();
-        
+        // Use the rectangle's actual left/top/width/height (canvas coordinates)
         captureRect = {
-          x: bounds.left,
-          y: bounds.top,
-          width: bounds.width,
-          height: bounds.height,
+          x: rect.left ?? 0,
+          y: rect.top ?? 0,
+          width: (rect.width ?? 0) * (rect.scaleX ?? 1),
+          height: (rect.height ?? 0) * (rect.scaleY ?? 1),
         };
-        console.log('Initial capture rect:', captureRect);
+        console.log('Capture rect (canvas coords):', captureRect);
       }
       
-      // 6. Use native canvas cropping for reliable results
-      //    First get the full canvas as a canvas element
-      const multiplier = 2; // 2x for high quality
+      // 7. Capture the full canvas at 1:1 scale with multiplier for quality
+      const multiplier = 2;
       const fullCanvas = fabricCanvas.toCanvasElement(multiplier);
       
-      // Create a temporary canvas for the cropped region
+      // 8. Create cropped canvas with exact snippet dimensions
       const croppedCanvas = document.createElement('canvas');
       croppedCanvas.width = captureRect.width * multiplier;
       croppedCanvas.height = captureRect.height * multiplier;
@@ -4071,21 +4074,25 @@ export default function SchematicEditor({
         // Draw only the snippet region from the full canvas
         ctx.drawImage(
           fullCanvas,
-          captureRect.x * multiplier, // Source x (with multiplier)
-          captureRect.y * multiplier, // Source y (with multiplier)
-          captureRect.width * multiplier, // Source width (with multiplier)
-          captureRect.height * multiplier, // Source height (with multiplier)
-          0, // Destination x
-          0, // Destination y
-          captureRect.width * multiplier, // Destination width
-          captureRect.height * multiplier  // Destination height
+          captureRect.x * multiplier,
+          captureRect.y * multiplier,
+          captureRect.width * multiplier,
+          captureRect.height * multiplier,
+          0,
+          0,
+          captureRect.width * multiplier,
+          captureRect.height * multiplier
         );
         
-        // 7. Generate blob directly from cropped canvas (no auto-trim)
+        // 9. Generate blob directly from cropped canvas
         const dataUrl = croppedCanvas.toDataURL('image/png', 1.0);
         const response = await fetch(dataUrl);
         blob = await response.blob();
       }
+      
+      // 10. Restore original viewport transform
+      fabricCanvas.viewportTransform = originalVPT as any;
+      fabricCanvas.setZoom(originalZoom);
       
       // 9. Restore snippet rectangle visibility
       if (snippetRectRef.current) {
