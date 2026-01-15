@@ -1838,7 +1838,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         // Icon (simplified analytics icon using text)
         pdf.setFontSize(8);
         pdf.setTextColor(59, 130, 246); // primary
-        pdf.text("📊", cardX + 5, cardStartY + 9);
+        pdf.text("#", cardX + 6, cardStartY + 9);
         
         // Label
         pdf.setFontSize(7);
@@ -1867,7 +1867,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         pdf.setFontSize(8);
         pdf.setTextColor(142, 81, 245);
-        pdf.text("◉", cardX + 5, cardStartY + 9);
+        pdf.text("M", cardX + 6, cardStartY + 9);
         
         pdf.setFontSize(7);
         pdf.setTextColor(100, 116, 139);
@@ -1893,7 +1893,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         pdf.setFontSize(8);
         pdf.setTextColor(100, 116, 139);
-        pdf.text("📅", cardX + 5, cardStartY + 9);
+        pdf.text("P", cardX + 6, cardStartY + 9);
         
         pdf.setFontSize(7);
         pdf.setTextColor(100, 116, 139);
@@ -1920,7 +1920,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         pdf.setFontSize(8);
         pdf.setTextColor(59, 130, 246);
-        pdf.text("⚡", cardX + 5, cardStartY + 9);
+        pdf.text("E", cardX + 6, cardStartY + 9);
         
         pdf.setFontSize(7);
         pdf.setTextColor(100, 116, 139);
@@ -3455,14 +3455,7 @@ ${charges.map((charge: any) => `| ${formatChargeType(charge.charge_type)} | ${ch
 
 | Meter Number | Name | Type | Total kWh | Readings |
 |--------------|------|------|-----------|----------|
-${meterData.slice(0, 20).map(m => `| ${m.meter_number} | ${m.name || 'N/A'} | ${m.meter_type} | ${formatNumber(m.totalKwh)} | ${m.readingsCount} |`).join('\n')}
-${meterData.length > 20 ? `\n*... and ${meterData.length - 20} more meters*` : ''}
-
-${Object.keys(csvColumnAggregations).length > 0 ? `### Additional Metrics
-
-| Metric | Aggregation | Value |
-|--------|-------------|-------|
-${Object.entries(csvColumnAggregations).map(([col, data]) => `| ${col} | ${data.aggregation.toUpperCase()} | ${formatNumber(data.value)}${data.multiplier !== 1 ? ` (×${data.multiplier})` : ''} |`).join('\n')}` : ''}`,
+${meterData.map(m => `| ${m.meter_number} | ${m.name || 'N/A'} | ${m.meter_type} | ${formatNumber(m.totalKwh)} | ${m.readingsCount} |`).join('\n')}`,
 
           documentValidation: documentExtractions.length > 0 ? `### Documents Analyzed
 
