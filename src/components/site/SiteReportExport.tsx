@@ -1063,12 +1063,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             pdf.text(runDate, leftMargin, yPos);
             yPos += 5;
             
-            pdf.setFontSize(8);
-            pdf.setFont("helvetica", "italic");
-            pdf.setTextColor(100, 116, 139);
-            pdf.text(`${periodStart} - ${periodEnd}`, leftMargin, yPos);
             pdf.setTextColor(0, 0, 0);
-            yPos += 8;
+            yPos += 3;
             
             // Energy Summary Cards - 6 cards in a row (compact)
             const cardGap = 3;
