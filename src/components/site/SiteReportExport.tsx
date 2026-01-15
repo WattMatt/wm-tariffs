@@ -1808,10 +1808,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         addSubsectionHeading("Basic Reconciliation Metrics");
         
-        // Calculate Other (common area) total from meterData
-        const otherTotal = meterData
-          .filter((m: any) => m.meter_type === 'other')
-          .reduce((sum: number, m: any) => sum + (parseFloat(m.totalKwh) || 0), 0);
+        // Use aggregated common area from reconciliation runs
+        const commonAreaTotal = reconciliationData?.commonAreaKwh || 0;
         
         const basicMetricsRows = [
           ["Meter Count", reconciliationData.meterCount.toString()],
@@ -1819,7 +1817,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           ["Solar Energy", `${formatNumber(parseFloat(reconciliationData.solarTotal))} kWh`],
           ["Total Supply", `${formatNumber(parseFloat(reconciliationData.totalSupply))} kWh`],
           ["Metered (Tenants)", `${formatNumber(parseFloat(reconciliationData.distributionTotal))} kWh`],
-          ["Common Area", `${formatNumber(otherTotal)} kWh`],
+          ["Common Area", `${formatNumber(commonAreaTotal)} kWh`],
           ["Unaccounted", `${parseFloat(reconciliationData.variancePercentage) > 0 ? "+" : ""}${formatNumber(parseFloat(reconciliationData.variance))} kWh (${parseFloat(reconciliationData.variancePercentage) > 0 ? "+" : ""}${reconciliationData.variancePercentage}%)`]
         ];
         
@@ -1929,6 +1927,13 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         solar_total: allReconciliations.reduce((sum, r) => sum + (r.solar_total || 0), 0),
         tenant_total: allReconciliations.reduce((sum, r) => sum + (r.tenant_total || 0), 0),
         total_supply: allReconciliations.reduce((sum, r) => sum + (r.total_supply || 0), 0),
+        discrepancy: allReconciliations.reduce((sum, r) => sum + (r.discrepancy || 0), 0),
+        common_area_kwh: allReconciliations.reduce((sum, r) => sum + (r.common_area_kwh || 0), 0),
+        recovery_rate: (() => {
+          const totalTenant = allReconciliations.reduce((sum, r) => sum + (r.tenant_total || 0), 0);
+          const totalSupply = allReconciliations.reduce((sum, r) => sum + (r.total_supply || 0), 0);
+          return totalSupply > 0 ? (totalTenant / totalSupply) * 100 : 0;
+        })(),
         date_from: allReconciliations[0]?.date_from,
         date_to: allReconciliations[allReconciliations.length - 1]?.date_to,
         reconciliation_meter_results: allReconciliations.flatMap(r => r.reconciliation_meter_results || [])
@@ -2427,6 +2432,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         solarTotal: selectedReconciliation.solar_total.toFixed(2),
         totalSupply: selectedReconciliation.total_supply.toFixed(2),
         distributionTotal: selectedReconciliation.tenant_total.toFixed(2),
+        commonAreaKwh: selectedReconciliation.common_area_kwh || 0,
         variance: selectedReconciliation.discrepancy.toFixed(2),
         variancePercentage: selectedReconciliation.total_supply > 0 
           ? ((selectedReconciliation.discrepancy / selectedReconciliation.total_supply) * 100).toFixed(2)
@@ -3254,7 +3260,7 @@ ${documentExtractions.map(doc => `| ${doc.fileName} | ${doc.documentType} | ${do
 | Solar Energy | ${formatNumber(selectedReconciliation.solar_total)} |
 | Total Supply | ${formatNumber(selectedReconciliation.total_supply)} |
 | Metered (Tenants) | ${formatNumber(selectedReconciliation.tenant_total)} |
-| Common Area | ${formatNumber((selectedReconciliation as any).other_total || 0)} |
+| Common Area | ${formatNumber(selectedReconciliation.common_area_kwh || 0)} |
 | Unaccounted | ${formatNumber(selectedReconciliation.discrepancy)} (${formatNumber((selectedReconciliation.discrepancy / selectedReconciliation.total_supply) * 100)}%) |
 
 ### Meter Results
