@@ -1799,9 +1799,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         await renderSection('metering-data-analysis');
         addSpacer(5);
         
-        // Render chart sections (if available)
-        await renderSection('meter-type-chart');
-        await renderSection('consumption-chart');
+        // Note: Chart sections (meter-type-chart, consumption-chart) removed as they were failing to render
         
         // Section 8: Reconciliation Results
         addSectionHeading("8. RECONCILIATION RESULTS", 16, true);
@@ -3626,8 +3624,8 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
           });
         }
         
-        // Add chart images
-        if (meterTypeChart) {
+        // Add chart images only if they contain valid data (data URLs are much longer than 30 chars)
+        if (meterTypeChart && meterTypeChart.length > 50) {
           sections.push({
             id: 'meter-type-chart',
             title: 'Meter Type Distribution',
@@ -3637,7 +3635,7 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
           });
         }
         
-        if (consumptionChart) {
+        if (consumptionChart && consumptionChart.length > 50) {
           sections.push({
             id: 'consumption-chart',
             title: 'Top 10 Meters by Consumption',

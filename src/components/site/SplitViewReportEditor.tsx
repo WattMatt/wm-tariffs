@@ -96,6 +96,19 @@ export function SplitViewReportEditor({
     setPageNumber((prev) => Math.min(prev + 1, numPages));
   };
 
+  const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value, 10);
+    if (!isNaN(value) && value >= 1 && value <= numPages) {
+      setPageNumber(value);
+    }
+  };
+
+  const handlePageInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.currentTarget.blur();
+    }
+  };
+
   const handleRefresh = async () => {
     setIsGenerating(true);
     try {
@@ -170,9 +183,18 @@ export function SplitViewReportEditor({
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
-                <span className="text-xs font-medium min-w-[4rem] text-center">
-                  {pageNumber} / {numPages}
-                </span>
+                <div className="flex items-center gap-1 text-xs font-medium">
+                  <input
+                    type="number"
+                    min={1}
+                    max={numPages}
+                    value={pageNumber}
+                    onChange={handlePageInputChange}
+                    onKeyDown={handlePageInputKeyDown}
+                    className="w-10 h-6 text-center text-xs border rounded bg-background [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <span>/ {numPages}</span>
+                </div>
                 <Button 
                   onClick={goToNextPage} 
                   variant="ghost" 
