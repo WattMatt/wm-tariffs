@@ -1416,12 +1416,6 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             // Add offset for section heading on first tariff to prevent overlap
             yPos = tariffCountOnPage === 0 ? tariffStartY + 18 : tariffStartY;
             
-            // Add horizontal separator before second tariff
-            if (tariffCountOnPage === 1) {
-              pdf.setDrawColor(200, 200, 200);
-              pdf.line(leftMargin, yPos - 3, pageWidth - rightMargin, yPos - 3);
-            }
-            
             // Add tariff subheading
             addSubsectionHeading(tariffName);
             
