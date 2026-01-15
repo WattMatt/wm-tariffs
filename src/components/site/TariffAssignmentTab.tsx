@@ -987,6 +987,26 @@ export default function TariffAssignmentTab({
     return periods;
   }, [meters, documentShopNumbers, enrichedDocuments, hideSeasonalAverages]);
 
+  // Calculate filtered global periods that respect the active date filter
+  const filteredGlobalPeriods = React.useMemo(() => {
+    // If no filter is active, use all periods
+    if (!activeFilterFrom || !activeFilterTo) {
+      return globalPeriods;
+    }
+    
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const periods: string[] = [];
+    const current = new Date(activeFilterFrom.getFullYear(), activeFilterFrom.getMonth(), 1);
+    const end = new Date(activeFilterTo.getFullYear(), activeFilterTo.getMonth(), 1);
+    
+    while (current <= end) {
+      periods.push(`${monthNames[current.getMonth()]} ${current.getFullYear()}`);
+      current.setMonth(current.getMonth() + 1);
+    }
+    
+    return periods;
+  }, [globalPeriods, activeFilterFrom, activeFilterTo]);
+
   // Helper to normalize chart data to global periods
   const normalizeToGlobalPeriods = React.useCallback((chartData: any[]): any[] => {
     if (globalPeriods.length === 0) return chartData;
@@ -1294,13 +1314,13 @@ export default function TariffAssignmentTab({
     pauseBulkCaptureRef.current = false;
     setIsBulkCapturePaused(false);
     
-    // Get all meters that have document data
+    // Get all meters that have document data, applying the date filter
     const metersWithDocs = meters
       .map(meter => ({
         meter,
-        docs: getMatchingShopNumbers(meter)
+        docs: getFilteredAndFilledData(getMatchingShopNumbers(meter))
       }))
-      .filter(m => m.docs.length > 0);
+      .filter(m => m.docs.length > 0 && m.docs.some(d => d.totalAmount !== null));
     
     if (metersWithDocs.length === 0) {
       toast.error('No meters with document data to capture');
@@ -1429,13 +1449,13 @@ export default function TariffAssignmentTab({
 
   // Start assignment chart capture (rate comparison charts)
   const startAssignmentChartCapture = () => {
-    // Get all meters that have document data
+    // Get all meters that have document data, applying the date filter
     const metersWithDocs = meters
       .map(meter => ({
         meter,
-        docs: getMatchingShopNumbers(meter)
+        docs: getFilteredAndFilledData(getMatchingShopNumbers(meter))
       }))
-      .filter(m => m.docs.length > 0);
+      .filter(m => m.docs.length > 0 && m.docs.some(d => d.totalAmount !== null));
     
     if (metersWithDocs.length === 0) {
       toast.error('No meters with document data to capture');
@@ -4825,7 +4845,7 @@ export default function TariffAssignmentTab({
         siteId={siteId}
         queue={backgroundCaptureQueue}
         chartType={hideSeasonalAverages ? 'comparison' : 'analysis'}
-        globalPeriods={globalPeriods}
+        globalPeriods={filteredGlobalPeriods}
         onBatchProgress={handleBackgroundBatchProgress}
         onComplete={handleBackgroundCaptureComplete}
         onPauseStateChange={setIsBulkCapturePaused}
@@ -4841,7 +4861,7 @@ export default function TariffAssignmentTab({
         siteId={siteId}
         queue={assignmentCaptureQueue}
         chartType="assignment"
-        globalPeriods={globalPeriods}
+        globalPeriods={filteredGlobalPeriods}
         onBatchProgress={handleAssignmentCaptureProgress}
         onComplete={handleAssignmentCaptureComplete}
         isActive={isAssignmentCapturing}
