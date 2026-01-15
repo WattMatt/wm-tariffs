@@ -1135,16 +1135,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               pdf.setTextColor(0, 0, 0);
             });
             
-            yPos = cardStartY + cardHeight + 5;
-            
-            // Add separator between periods (except for last one)
-            if (runIndex < sortedReconciliations.length - 1) {
-              yPos += 3;
-              pdf.setDrawColor(229, 231, 235);
-              pdf.setLineWidth(0.5);
-              pdf.line(leftMargin, yPos, pageWidth - rightMargin, yPos);
-              yPos += 8;
-            }
+            yPos = cardStartY + cardHeight + 8;
           });
           
           yPos += 5;
