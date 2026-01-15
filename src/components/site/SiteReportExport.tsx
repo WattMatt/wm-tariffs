@@ -1137,61 +1137,6 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             
             yPos = cardStartY + cardHeight + 5;
             
-            // Revenue Summary Cards (if revenue enabled) - 5 cards
-            if (run.revenue_enabled) {
-              const revenueCardGap = 3;
-              const numRevenueCards = 5;
-              const totalRevenueGaps = revenueCardGap * (numRevenueCards - 1);
-              const revenueCardWidth = (availableWidth - totalRevenueGaps) / numRevenueCards;
-              const revenueCardHeight = 22;
-              const revenueCardStartY = yPos;
-              
-              const totalRevenue = (run.grid_supply_cost || 0) + (run.solar_cost || 0) + (run.total_revenue || 0);
-              
-              const revenueCards = [
-                { title: "Grid Supply Cost", value: run.grid_supply_cost || 0, color: [0, 0, 0] as [number, number, number] },
-                { title: "Solar Revenue", value: run.solar_cost || 0, color: [34, 197, 94] as [number, number, number] },
-                { title: "Tenant Revenue", value: run.total_revenue || 0, color: [59, 130, 246] as [number, number, number] },
-                { title: "Total Revenue", value: totalRevenue, color: [16, 185, 129] as [number, number, number], highlight: true },
-                { title: "Avg Cost/kWh", value: run.avg_cost_per_kwh || 0, color: [100, 116, 139] as [number, number, number], decimals: 4 },
-              ];
-              
-              revenueCards.forEach((card, index) => {
-                const cardX = leftMargin + index * (revenueCardWidth + revenueCardGap);
-                
-                // Card background
-                if (card.highlight) {
-                  pdf.setFillColor(236, 253, 245); // green-50
-                } else {
-                  pdf.setFillColor(249, 250, 251); // gray-50
-                }
-                pdf.roundedRect(cardX, revenueCardStartY, revenueCardWidth, revenueCardHeight, 2, 2, 'F');
-                
-                // Card border
-                pdf.setDrawColor(229, 231, 235);
-                pdf.setLineWidth(0.3);
-                pdf.roundedRect(cardX, revenueCardStartY, revenueCardWidth, revenueCardHeight, 2, 2, 'S');
-                
-                // Title
-                pdf.setFontSize(6);
-                pdf.setFont("helvetica", "normal");
-                pdf.setTextColor(100, 116, 139);
-                pdf.text(sanitizeForPdf(card.title), cardX + 2, revenueCardStartY + 4);
-                
-                // Value
-                pdf.setFontSize(8);
-                pdf.setFont("helvetica", "bold");
-                pdf.setTextColor(card.color[0], card.color[1], card.color[2]);
-                const decimals = (card as any).decimals || 2;
-                const valueText = `R ${formatNumber(card.value, decimals)}`;
-                pdf.text(valueText, cardX + 2, revenueCardStartY + 13, { maxWidth: revenueCardWidth - 4 });
-                
-                pdf.setTextColor(0, 0, 0);
-              });
-              
-              yPos = revenueCardStartY + revenueCardHeight + 5;
-            }
-            
             // Add separator between periods (except for last one)
             if (runIndex < sortedReconciliations.length - 1) {
               yPos += 3;
