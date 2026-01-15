@@ -1815,13 +1815,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         const basicMetricsRows = [
           ["Meter Count", reconciliationData.meterCount.toString()],
-          ["Grid Supply (Bulk)", `${formatNumber(parseFloat(reconciliationData.councilTotal))} kWh`],
-          ["Solar Generation", `${formatNumber(parseFloat(reconciliationData.solarTotal))} kWh`],
+          ["Grid Supply", `${formatNumber(parseFloat(reconciliationData.councilTotal))} kWh`],
+          ["Solar Energy", `${formatNumber(parseFloat(reconciliationData.solarTotal))} kWh`],
           ["Total Supply", `${formatNumber(parseFloat(reconciliationData.totalSupply))} kWh`],
-          ["Distribution Total", `${formatNumber(parseFloat(reconciliationData.distributionTotal))} kWh`],
-          ["Other (Common Area)", `${formatNumber(otherTotal)} kWh`],
-          ["Recovery Rate", `${formatNumber(parseFloat(reconciliationData.recoveryRate))}%`],
-          ["Variance", `${parseFloat(reconciliationData.variancePercentage) > 0 ? "+" : ""}${formatNumber(parseFloat(reconciliationData.variance))} kWh (${parseFloat(reconciliationData.variancePercentage) > 0 ? "+" : ""}${reconciliationData.variancePercentage}%)`]
+          ["Metered (Tenants)", `${formatNumber(parseFloat(reconciliationData.distributionTotal))} kWh`],
+          ["Common Area", `${formatNumber(otherTotal)} kWh`],
+          ["Unaccounted", `${parseFloat(reconciliationData.variancePercentage) > 0 ? "+" : ""}${formatNumber(parseFloat(reconciliationData.variance))} kWh (${parseFloat(reconciliationData.variancePercentage) > 0 ? "+" : ""}${reconciliationData.variancePercentage}%)`]
         ];
         
         addTable(["Metric", "Value"], basicMetricsRows, [100, 70], "Basic Reconciliation Metrics");
@@ -3251,12 +3250,12 @@ ${documentExtractions.map(doc => `| ${doc.fileName} | ${doc.documentType} | ${do
 
 | Category | Value (kWh) |
 |----------|-------------|
-| Grid Supply (Bulk) | ${formatNumber(selectedReconciliation.bulk_total)} |
-| Solar Generation | ${formatNumber(selectedReconciliation.solar_total)} |
+| Grid Supply | ${formatNumber(selectedReconciliation.bulk_total)} |
+| Solar Energy | ${formatNumber(selectedReconciliation.solar_total)} |
 | Total Supply | ${formatNumber(selectedReconciliation.total_supply)} |
-| Distribution Total | ${formatNumber(selectedReconciliation.tenant_total)} |
-| Variance | ${formatNumber(selectedReconciliation.discrepancy)} (${formatNumber((selectedReconciliation.discrepancy / selectedReconciliation.total_supply) * 100)}%) |
-| Recovery Rate | ${formatNumber(selectedReconciliation.recovery_rate)}% |
+| Metered (Tenants) | ${formatNumber(selectedReconciliation.tenant_total)} |
+| Common Area | ${formatNumber((selectedReconciliation as any).other_total || 0)} |
+| Unaccounted | ${formatNumber(selectedReconciliation.discrepancy)} (${formatNumber((selectedReconciliation.discrepancy / selectedReconciliation.total_supply) * 100)}%) |
 
 ### Meter Results
 
