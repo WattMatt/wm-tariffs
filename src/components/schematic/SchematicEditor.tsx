@@ -4044,18 +4044,19 @@ export default function SchematicEditor({
       fabricCanvas.setZoom(1);
       fabricCanvas.renderAll();
       
-      // 6. Get the rectangle's canvas coordinates (not viewport coordinates)
+      // 6. Get the rectangle's bounding box in canvas coordinates (after viewport reset to 1:1)
       let captureRect = snippetRect;
       if (snippetRectRef.current) {
         const rect = snippetRectRef.current;
-        // Use the rectangle's actual left/top/width/height (canvas coordinates)
+        // getBoundingRect() at 1:1 viewport returns accurate canvas-space coordinates
+        const boundingRect = rect.getBoundingRect();
         captureRect = {
-          x: rect.left ?? 0,
-          y: rect.top ?? 0,
-          width: (rect.width ?? 0) * (rect.scaleX ?? 1),
-          height: (rect.height ?? 0) * (rect.scaleY ?? 1),
+          x: boundingRect.left,
+          y: boundingRect.top,
+          width: boundingRect.width,
+          height: boundingRect.height,
         };
-        console.log('Capture rect (canvas coords):', captureRect);
+        console.log('Capture rect (from getBoundingRect at 1:1):', captureRect);
       }
       
       // 7. Capture the full canvas at 1:1 scale with multiplier for quality
