@@ -1022,6 +1022,188 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           }
         };
 
+        // Helper to render reconciliation period cards (visual blocks like UI)
+        const renderReconciliationCards = (reconciliations: any[]) => {
+          if (!reconciliations || reconciliations.length === 0) return;
+          
+          // Sort by date_from ascending (chronological order - earliest first)
+          const sortedReconciliations = [...reconciliations].sort((a, b) => 
+            new Date(a.date_from).getTime() - new Date(b.date_from).getTime()
+          );
+          
+          sortedReconciliations.forEach((run: any, runIndex: number) => {
+            const runDate = run.run_name || `${format(new Date(run.date_from), "dd MMM yyyy")} - ${format(new Date(run.date_to), "dd MMM yyyy")}`;
+            const periodStart = format(new Date(run.date_from), "dd MMM yyyy");
+            const periodEnd = format(new Date(run.date_to), "dd MMM yyyy");
+            
+            // Calculate metrics
+            const otherMeters = run.reconciliation_meter_results?.filter((m: any) => m.meter_type === 'other') || [];
+            const commonAreaKwh = otherMeters.reduce((sum: number, m: any) => sum + (m.total_kwh || 0), 0);
+            const unaccountedLoss = run.total_supply - run.tenant_total - commonAreaKwh;
+            
+            // Percentages
+            const gridPercent = run.total_supply > 0 ? (run.bulk_total / run.total_supply) * 100 : 0;
+            const solarPercent = run.total_supply > 0 ? (run.solar_total / run.total_supply) * 100 : 0;
+            const tenantPercent = run.total_supply > 0 ? (run.tenant_total / run.total_supply) * 100 : 0;
+            const commonAreaPercent = run.total_supply > 0 ? (commonAreaKwh / run.total_supply) * 100 : 0;
+            const unaccountedPercent = run.total_supply > 0 ? (unaccountedLoss / run.total_supply) * 100 : 0;
+            
+            // Check for new page - need space for header + cards (~70mm)
+            if (yPos > pageHeight - bottomMargin - 80) {
+              addFooter();
+              addPageNumber();
+              pdf.addPage();
+              yPos = topMargin;
+            }
+            
+            // Period header
+            pdf.setFontSize(11);
+            pdf.setFont("helvetica", "bold");
+            pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
+            pdf.text(runDate, leftMargin, yPos);
+            yPos += 5;
+            
+            pdf.setFontSize(8);
+            pdf.setFont("helvetica", "italic");
+            pdf.setTextColor(100, 116, 139);
+            pdf.text(`${periodStart} - ${periodEnd}`, leftMargin, yPos);
+            pdf.setTextColor(0, 0, 0);
+            yPos += 8;
+            
+            // Energy Summary Cards - 6 cards in a row (compact)
+            const cardGap = 3;
+            const numCards = 6;
+            const totalGaps = cardGap * (numCards - 1);
+            const availableWidth = pageWidth - leftMargin - rightMargin;
+            const cardWidth = (availableWidth - totalGaps) / numCards;
+            const cardHeight = 24;
+            const cardStartY = yPos;
+            
+            // Energy card data with colors
+            const energyCards = [
+              { title: "Grid Supply", subtitle: "Grid", value: run.bulk_total, percent: gridPercent, color: [0, 0, 0] as [number, number, number] },
+              { title: "Solar Energy", subtitle: "Solar", value: run.solar_total, percent: solarPercent, color: [34, 197, 94] as [number, number, number] }, // green-500
+              { title: "Total Supply", subtitle: "Grid + Solar", value: run.total_supply, percent: 100, color: [59, 130, 246] as [number, number, number], highlight: true }, // blue-500
+              { title: "Metered", subtitle: "Tenants", value: run.tenant_total, percent: tenantPercent, color: [0, 0, 0] as [number, number, number] },
+              { title: "Common Area", subtitle: "Other", value: commonAreaKwh, percent: commonAreaPercent, color: [249, 115, 22] as [number, number, number] }, // orange-500
+              { title: "Unaccounted", subtitle: "Loss", value: unaccountedLoss, percent: unaccountedPercent, color: unaccountedLoss > 0 ? [239, 68, 68] as [number, number, number] : [34, 197, 94] as [number, number, number] }, // red or green
+            ];
+            
+            energyCards.forEach((card, index) => {
+              const cardX = leftMargin + index * (cardWidth + cardGap);
+              
+              // Card background
+              if (card.highlight) {
+                pdf.setFillColor(239, 246, 255); // blue-50
+              } else {
+                pdf.setFillColor(249, 250, 251); // gray-50
+              }
+              pdf.roundedRect(cardX, cardStartY, cardWidth, cardHeight, 2, 2, 'F');
+              
+              // Card border
+              pdf.setDrawColor(229, 231, 235); // gray-200
+              pdf.setLineWidth(0.3);
+              pdf.roundedRect(cardX, cardStartY, cardWidth, cardHeight, 2, 2, 'S');
+              
+              // Title
+              pdf.setFontSize(6);
+              pdf.setFont("helvetica", "normal");
+              pdf.setTextColor(100, 116, 139);
+              pdf.text(sanitizeForPdf(card.title), cardX + 2, cardStartY + 4);
+              
+              // Subtitle
+              pdf.setFontSize(5);
+              pdf.text(sanitizeForPdf(card.subtitle), cardX + 2, cardStartY + 8);
+              
+              // Value
+              pdf.setFontSize(8);
+              pdf.setFont("helvetica", "bold");
+              pdf.setTextColor(card.color[0], card.color[1], card.color[2]);
+              const valueText = formatNumber(card.value);
+              pdf.text(valueText, cardX + 2, cardStartY + 15);
+              
+              // kWh unit
+              pdf.setFontSize(6);
+              pdf.setFont("helvetica", "normal");
+              pdf.text("kWh", cardX + 2, cardStartY + 19);
+              
+              // Percentage
+              pdf.setFontSize(5);
+              pdf.setTextColor(100, 116, 139);
+              pdf.text(`${formatNumber(card.percent)}%`, cardX + 2, cardStartY + 22);
+              
+              pdf.setTextColor(0, 0, 0);
+            });
+            
+            yPos = cardStartY + cardHeight + 5;
+            
+            // Revenue Summary Cards (if revenue enabled) - 5 cards
+            if (run.revenue_enabled) {
+              const revenueCardGap = 3;
+              const numRevenueCards = 5;
+              const totalRevenueGaps = revenueCardGap * (numRevenueCards - 1);
+              const revenueCardWidth = (availableWidth - totalRevenueGaps) / numRevenueCards;
+              const revenueCardHeight = 22;
+              const revenueCardStartY = yPos;
+              
+              const totalRevenue = (run.grid_supply_cost || 0) + (run.solar_cost || 0) + (run.total_revenue || 0);
+              
+              const revenueCards = [
+                { title: "Grid Supply Cost", value: run.grid_supply_cost || 0, color: [0, 0, 0] as [number, number, number] },
+                { title: "Solar Revenue", value: run.solar_cost || 0, color: [34, 197, 94] as [number, number, number] },
+                { title: "Tenant Revenue", value: run.total_revenue || 0, color: [59, 130, 246] as [number, number, number] },
+                { title: "Total Revenue", value: totalRevenue, color: [16, 185, 129] as [number, number, number], highlight: true },
+                { title: "Avg Cost/kWh", value: run.avg_cost_per_kwh || 0, color: [100, 116, 139] as [number, number, number], decimals: 4 },
+              ];
+              
+              revenueCards.forEach((card, index) => {
+                const cardX = leftMargin + index * (revenueCardWidth + revenueCardGap);
+                
+                // Card background
+                if (card.highlight) {
+                  pdf.setFillColor(236, 253, 245); // green-50
+                } else {
+                  pdf.setFillColor(249, 250, 251); // gray-50
+                }
+                pdf.roundedRect(cardX, revenueCardStartY, revenueCardWidth, revenueCardHeight, 2, 2, 'F');
+                
+                // Card border
+                pdf.setDrawColor(229, 231, 235);
+                pdf.setLineWidth(0.3);
+                pdf.roundedRect(cardX, revenueCardStartY, revenueCardWidth, revenueCardHeight, 2, 2, 'S');
+                
+                // Title
+                pdf.setFontSize(6);
+                pdf.setFont("helvetica", "normal");
+                pdf.setTextColor(100, 116, 139);
+                pdf.text(sanitizeForPdf(card.title), cardX + 2, revenueCardStartY + 4);
+                
+                // Value
+                pdf.setFontSize(8);
+                pdf.setFont("helvetica", "bold");
+                pdf.setTextColor(card.color[0], card.color[1], card.color[2]);
+                const decimals = (card as any).decimals || 2;
+                const valueText = `R ${formatNumber(card.value, decimals)}`;
+                pdf.text(valueText, cardX + 2, revenueCardStartY + 13, { maxWidth: revenueCardWidth - 4 });
+                
+                pdf.setTextColor(0, 0, 0);
+              });
+              
+              yPos = revenueCardStartY + revenueCardHeight + 5;
+            }
+            
+            // Add separator between periods (except for last one)
+            if (runIndex < sortedReconciliations.length - 1) {
+              yPos += 3;
+              pdf.setDrawColor(229, 231, 235);
+              pdf.setLineWidth(0.5);
+              pdf.line(leftMargin, yPos, pageWidth - rightMargin, yPos);
+              yPos += 8;
+            }
+          });
+          
+          yPos += 5;
+        };
 
         const addSpacer = (height: number = 5) => {
           yPos += height;
@@ -1160,6 +1342,16 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         // Section 1: Executive Summary
         addSectionHeading("1. EXECUTIVE SUMMARY", 16, true);
         await renderSection('executive-summary');
+        
+        // Render Period Breakdowns as visual cards (sorted chronologically)
+        // Get runs from reconciliationData if available (populated by previewData)
+        const reconciliationRuns = (previewData as any)?.reconciliationRuns || [];
+        if (reconciliationRuns && reconciliationRuns.length > 0) {
+          addSpacer(5);
+          addSubsectionHeading("Period Breakdowns");
+          renderReconciliationCards(reconciliationRuns);
+        }
+        
         addSpacer(8);
         
         // Section 2: Site Infrastructure
@@ -3275,9 +3467,7 @@ ${run.revenue_enabled ? `**Revenue Summary**
 | Variance | ${formatNumber(selectedReconciliation.discrepancy)} kWh (${selectedReconciliation.total_supply > 0 ? formatNumber((selectedReconciliation.discrepancy / selectedReconciliation.total_supply) * 100) : '0.00'}%) |
 | Recovery Rate | ${formatNumber(selectedReconciliation.recovery_rate)}% |
 
-### Period Breakdowns
-
-${generatePeriodSummaries()}`,
+`,
 
           siteInfrastructure: `### Meter Summary
 
@@ -3540,6 +3730,7 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
         meterHierarchy,
         meterBreakdown,
         reconciliationData,
+        reconciliationRuns: allReconciliations, // Add individual runs for period breakdown cards
         documentExtractions,
         anomalies,
         selectedCsvColumns,
