@@ -3285,10 +3285,10 @@ ${documentExtractions.map(doc => `| ${doc.fileName} | ${doc.documentType} | ${do
 |----------|-------------|
 | Grid Supply (Bulk) | ${formatNumber(selectedReconciliation.bulk_total)} |
 | Solar Generation | ${formatNumber(selectedReconciliation.solar_total)} |
-| **Total Supply** | **${formatNumber(selectedReconciliation.total_supply)}** |
+| Total Supply | ${formatNumber(selectedReconciliation.total_supply)} |
 | Distribution Total | ${formatNumber(selectedReconciliation.tenant_total)} |
-| **Variance** | **${formatNumber(selectedReconciliation.discrepancy)} (${formatNumber((selectedReconciliation.discrepancy / selectedReconciliation.total_supply) * 100)}%)** |
-| **Recovery Rate** | **${formatNumber(selectedReconciliation.recovery_rate)}%** |
+| Variance | ${formatNumber(selectedReconciliation.discrepancy)} (${formatNumber((selectedReconciliation.discrepancy / selectedReconciliation.total_supply) * 100)}%) |
+| Recovery Rate | ${formatNumber(selectedReconciliation.recovery_rate)}% |
 
 ### Meter Results
 
