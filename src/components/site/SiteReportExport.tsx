@@ -1048,8 +1048,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             const commonAreaPercent = run.total_supply > 0 ? (commonAreaKwh / run.total_supply) * 100 : 0;
             const unaccountedPercent = run.total_supply > 0 ? (unaccountedLoss / run.total_supply) * 100 : 0;
             
-            // Check for new page - need space for header + cards (~70mm)
-            if (yPos > pageHeight - bottomMargin - 80) {
+            // Check for new page - need space for header (~8mm) + cards (~32mm) = ~40mm
+            const rowHeight = 40;
+            if (yPos > pageHeight - bottomMargin - rowHeight) {
               addFooter();
               addPageNumber();
               pdf.addPage();
