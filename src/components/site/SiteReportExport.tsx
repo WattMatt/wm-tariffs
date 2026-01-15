@@ -1808,56 +1808,24 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         addSubsectionHeading("Basic Reconciliation Metrics");
         
+        // Calculate Other (common area) total from meterData
+        const otherTotal = meterData
+          .filter((m: any) => m.meter_type === 'other')
+          .reduce((sum: number, m: any) => sum + (parseFloat(m.totalKwh) || 0), 0);
+        
         const basicMetricsRows = [
+          ["Meter Count", reconciliationData.meterCount.toString()],
+          ["Grid Supply (Bulk)", `${formatNumber(parseFloat(reconciliationData.councilTotal))} kWh`],
+          ["Solar Generation", `${formatNumber(parseFloat(reconciliationData.solarTotal))} kWh`],
           ["Total Supply", `${formatNumber(parseFloat(reconciliationData.totalSupply))} kWh`],
           ["Distribution Total", `${formatNumber(parseFloat(reconciliationData.distributionTotal))} kWh`],
+          ["Other (Common Area)", `${formatNumber(otherTotal)} kWh`],
           ["Recovery Rate", `${formatNumber(parseFloat(reconciliationData.recoveryRate))}%`],
           ["Variance", `${parseFloat(reconciliationData.variancePercentage) > 0 ? "+" : ""}${formatNumber(parseFloat(reconciliationData.variance))} kWh (${parseFloat(reconciliationData.variancePercentage) > 0 ? "+" : ""}${reconciliationData.variancePercentage}%)`]
         ];
         
         addTable(["Metric", "Value"], basicMetricsRows, [100, 70], "Basic Reconciliation Metrics");
         addSpacer(5);
-        
-        // KPI Indicators
-        addSubsectionHeading("Data Collection KPIs");
-        
-        // Calculate KPI stats from meter data
-        const totalReadingsCount = meterData.reduce((sum: number, meter: any) => sum + (meter.readingsCount || 0), 0);
-        const totalMetersCount = meterData.length;
-        const totalConsumption = meterData.reduce((sum: number, meter: any) => sum + (parseFloat(meter.totalKwh) || 0), 0);
-        
-        const kpiRows = [
-          ["Total Data Points Reviewed", totalReadingsCount.toLocaleString()],
-          ["Active Meters Analyzed", totalMetersCount.toString()],
-          ["Total Consumption", `${formatNumber(totalConsumption)} kWh`],
-          ["Average Readings per Meter", totalMetersCount > 0 ? Math.round(totalReadingsCount / totalMetersCount).toString() : "0"]
-        ];
-        
-        addTable(["KPI Indicator", "Value"], kpiRows, [100, 70], "Data Collection KPIs");
-        addSpacer(8);
-        
-        // CSV Column Aggregations (if available)
-        if (csvColumnAggregations && Object.keys(csvColumnAggregations).length > 0) {
-          addSubsectionHeading("CSV Column Aggregations");
-          addText("Site-wide aggregated values for selected CSV columns:");
-          addSpacer(3);
-          
-          const csvMetricsRows = Object.entries(csvColumnAggregations).map(([columnName, data]: [string, any]) => [
-            columnName,
-            formatNumber(data.value),
-            data.aggregation === 'sum' ? 'kWh' : 'kVA',
-            data.aggregation.toUpperCase(),
-            data.multiplier !== 1 ? `×${data.multiplier}` : '-'
-          ]);
-          
-          addTable(
-            ["Column", "Value", "Unit", "Aggregation", "Multiplier"],
-            csvMetricsRows,
-            [50, 35, 25, 30, 30],
-            "CSV Column Aggregations"
-          );
-          addSpacer(8);
-        }
         
         // Section 9: Recommendations
         addSectionHeading("9. RECOMMENDATIONS", 16, true);
@@ -3176,7 +3144,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 |--------|-------|------------|
 | Grid Supply | ${formatNumber(run.bulk_total)} kWh | ${formatNumber(gridPercent)}% |
 | Solar Energy | ${formatNumber(run.solar_total)} kWh | ${formatNumber(solarPercent)}% |
-| **Total Supply** | **${formatNumber(run.total_supply)} kWh** | **100.00%** |
+| Total Supply | ${formatNumber(run.total_supply)} kWh | 100.00% |
 | Metered Consumption | ${formatNumber(run.tenant_total)} kWh | ${formatNumber(tenantPercent)}% |
 | Common Area | ${formatNumber(commonAreaKwh)} kWh | ${formatNumber(commonAreaPercent)}% |
 | Unaccounted Loss | ${formatNumber(unaccountedLoss)} kWh | ${formatNumber(unaccountedPercent)}% |
@@ -3222,7 +3190,7 @@ ${run.revenue_enabled ? `**Revenue Summary**
 | Check Meters | ${reconciliationData.checkMeterCount} |
 | Tenant Meters | ${reconciliationData.distributionCount} |
 | Other Meters | ${reconciliationData.otherCount} |
-| **Total** | **${reconciliationData.meterCount}** |
+| Total | ${reconciliationData.meterCount} |
 
 ### All Meters
 
@@ -3294,8 +3262,11 @@ ${documentExtractions.map(doc => `| ${doc.fileName} | ${doc.documentType} | ${do
 
 | Meter | Type | Consumption (kWh) | Cost |
 |-------|------|-------------------|------|
-${selectedReconciliation.reconciliation_meter_results?.slice(0, 30).map((r: any) => `| ${r.meter_number} | ${r.meter_type} | ${formatNumber(r.total_kwh)} | ${r.total_cost ? 'R ' + formatNumber(r.total_cost) : 'N/A'} |`).join('\n')}
-${selectedReconciliation.reconciliation_meter_results?.length > 30 ? `\n*... and ${selectedReconciliation.reconciliation_meter_results.length - 30} more meters*` : ''}`,
+${(() => {
+  const uniqueMeters = [...new Map(selectedReconciliation.reconciliation_meter_results?.map((r: any) => [r.meter_number, r])).values()];
+  return uniqueMeters.slice(0, 30).map((r: any) => `| ${r.meter_number} | ${r.meter_type} | ${formatNumber(r.total_kwh)} | ${r.total_cost ? 'R ' + formatNumber(r.total_cost) : 'N/A'} |`).join('\n') +
+    (uniqueMeters.length > 30 ? `\n*... and ${uniqueMeters.length - 30} more meters*` : '');
+})()}`,
 
           costAnalysis: costAnalysis.revenueEnabled ? `### Cost Breakdown by Type
 
@@ -3312,7 +3283,7 @@ ${selectedReconciliation.reconciliation_meter_results?.length > 30 ? `\n*... and
 | Energy Charges | ${formatNumber(costAnalysis.costByComponent.energy)} |
 | Demand Charges | ${formatNumber(costAnalysis.costByComponent.demand)} |
 | Fixed Charges | ${formatNumber(costAnalysis.costByComponent.fixed)} |
-| **Total Cost** | **${formatNumber(costAnalysis.totalCost)}** |
+| Total Cost | ${formatNumber(costAnalysis.totalCost)} |
 
 ### Financial Summary
 
@@ -3320,7 +3291,7 @@ ${selectedReconciliation.reconciliation_meter_results?.length > 30 ? `\n*... and
 |------|------------|
 | Total Supply Cost | ${formatNumber(costAnalysis.totalCost)} |
 | Tenant Revenue | ${formatNumber(costAnalysis.tenantRevenue)} |
-| **Net Position** | **${formatNumber(costAnalysis.netPosition)}** |
+| Net Position | ${formatNumber(costAnalysis.netPosition)} |
 | Avg Cost per kWh | ${formatNumber(costAnalysis.avgCostPerKwh, 4)} |` : `Cost analysis requires revenue to be enabled in reconciliation settings.`,
 
           findingsAnomalies: anomalies.length > 0 ? `### Anomalies Detected
