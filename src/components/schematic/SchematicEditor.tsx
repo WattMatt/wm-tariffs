@@ -4030,10 +4030,9 @@ export default function SchematicEditor({
         snippetRectRef.current.visible = false;
       }
       
-      // 3. IMPORTANT: Keep background image VISIBLE so it's included in the snippet capture!
-      // The snippet should include the schematic background with all overlays on top
+      // 3. Hide background image - capture only overlays (meter cards, connection lines)
       if (backgroundObj) {
-        backgroundObj.visible = true;  // Ensure background is visible for capture
+        backgroundObj.visible = false;
       }
       
       // 4. Render canvas to apply visibility changes
@@ -4082,120 +4081,10 @@ export default function SchematicEditor({
           captureRect.height * multiplier  // Destination height
         );
         
-        // 7. Auto-trim: detect and remove background padding
-        const imageData = ctx.getImageData(0, 0, croppedCanvas.width, croppedCanvas.height);
-        const data = imageData.data;
-        
-        // Helper: Check if pixel is light background (white or light gray)
-        // Most schematic backgrounds are white or very light gray
-        const isLightBackground = (r: number, g: number, b: number, threshold = 240) => {
-          // Consider it background if all RGB values are above threshold
-          return r >= threshold && g >= threshold && b >= threshold;
-        };
-        
-        console.log('Starting auto-trim scan...');
-        
-        // Find content bounds by scanning from edges
-        let top = 0, bottom = croppedCanvas.height - 1, left = 0, right = croppedCanvas.width - 1;
-        
-        // Scan from top
-        topLoop: for (let y = 0; y < croppedCanvas.height; y++) {
-          for (let x = 0; x < croppedCanvas.width; x++) {
-            const idx = (y * croppedCanvas.width + x) * 4;
-            const r = data[idx];
-            const g = data[idx + 1];
-            const b = data[idx + 2];
-            if (!isLightBackground(r, g, b)) {
-              top = y;
-              console.log('Found top content at y:', y, 'color:', { r, g, b });
-              break topLoop;
-            }
-          }
-        }
-        
-        // Scan from bottom
-        bottomLoop: for (let y = croppedCanvas.height - 1; y >= 0; y--) {
-          for (let x = 0; x < croppedCanvas.width; x++) {
-            const idx = (y * croppedCanvas.width + x) * 4;
-            const r = data[idx];
-            const g = data[idx + 1];
-            const b = data[idx + 2];
-            if (!isLightBackground(r, g, b)) {
-              bottom = y;
-              console.log('Found bottom content at y:', y, 'color:', { r, g, b });
-              break bottomLoop;
-            }
-          }
-        }
-        
-        // Scan from left
-        leftLoop: for (let x = 0; x < croppedCanvas.width; x++) {
-          for (let y = 0; y < croppedCanvas.height; y++) {
-            const idx = (y * croppedCanvas.width + x) * 4;
-            const r = data[idx];
-            const g = data[idx + 1];
-            const b = data[idx + 2];
-            if (!isLightBackground(r, g, b)) {
-              left = x;
-              console.log('Found left content at x:', x, 'color:', { r, g, b });
-              break leftLoop;
-            }
-          }
-        }
-        
-        // Scan from right
-        rightLoop: for (let x = croppedCanvas.width - 1; x >= 0; x--) {
-          for (let y = 0; y < croppedCanvas.height; y++) {
-            const idx = (y * croppedCanvas.width + x) * 4;
-            const r = data[idx];
-            const g = data[idx + 1];
-            const b = data[idx + 2];
-            if (!isLightBackground(r, g, b)) {
-              right = x;
-              console.log('Found right content at x:', x, 'color:', { r, g, b });
-              break rightLoop;
-            }
-          }
-        }
-        
-        console.log('Content bounds:', { top, bottom, left, right });
-        console.log('Original dimensions:', croppedCanvas.width, 'x', croppedCanvas.height);
-        
-        // 8. Create final canvas with exact content bounds
-        const contentWidth = right - left + 1;
-        const contentHeight = bottom - top + 1;
-        
-        console.log('Trimming to content:', contentWidth, 'x', contentHeight);
-        
-        // Only trim if we found actual content bounds
-        if (contentWidth > 0 && contentHeight > 0 && 
-            (top > 0 || bottom < croppedCanvas.height - 1 || left > 0 || right < croppedCanvas.width - 1)) {
-          
-          const finalCanvas = document.createElement('canvas');
-          finalCanvas.width = contentWidth;
-          finalCanvas.height = contentHeight;
-          const finalCtx = finalCanvas.getContext('2d');
-          
-          if (finalCtx) {
-            finalCtx.drawImage(
-              croppedCanvas,
-              left, top, contentWidth, contentHeight, // Source
-              0, 0, contentWidth, contentHeight // Destination
-            );
-            
-            const dataUrl = finalCanvas.toDataURL('image/png', 1.0);
-            console.log('✓ Auto-trimmed successfully! Final dimensions:', contentWidth, 'x', contentHeight);
-            
-            const response = await fetch(dataUrl);
-            blob = await response.blob();
-          }
-        } else {
-          // No trimming needed or detection failed, use original
-          console.log('⚠ No trimming applied - using original crop');
-          const dataUrl = croppedCanvas.toDataURL('image/png', 1.0);
-          const response = await fetch(dataUrl);
-          blob = await response.blob();
-        }
+        // 7. Generate blob directly from cropped canvas (no auto-trim)
+        const dataUrl = croppedCanvas.toDataURL('image/png', 1.0);
+        const response = await fetch(dataUrl);
+        blob = await response.blob();
       }
       
       // 9. Restore snippet rectangle visibility
