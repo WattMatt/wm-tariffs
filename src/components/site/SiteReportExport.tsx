@@ -1861,34 +1861,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           addSpacer(8);
         }
         
-        // Section 9: Cost Analysis (if available)
-        const costAnalysisContent = getSectionContent('cost-analysis');
-        if (costAnalysisContent) {
-          addSectionHeading("9. COST ANALYSIS", 16, true);
-          await renderSection('cost-analysis');
-          addSpacer(8);
-        }
-        
-        // Section 10: Findings & Anomalies
-        addSectionHeading("10. FINDINGS & ANOMALIES", 16, true);
-        await renderSection('findings-anomalies');
-        addSpacer(5);
-        
-        // Anomalies detail (if any)
-        if (anomalies.length > 0) {
-          addSubsectionHeading("Detected Anomalies");
-          const anomalySummaryRows = anomalies.slice(0, 10).map((a: any, idx: number) => [
-            `${idx + 1}`,
-            a.severity,
-            a.meter || "General",
-            a.description.substring(0, 60) + (a.description.length > 60 ? "..." : "")
-          ]);
-          addTable(["#", "Severity", "Meter", "Description"], anomalySummaryRows, [10, 25, 35, 100], "Detected Anomalies");
-          addSpacer(8);
-        }
-        
-        // Section 11: Recommendations
-        addSectionHeading("11. RECOMMENDATIONS", 16, true);
+        // Section 9: Recommendations
+        addSectionHeading("9. RECOMMENDATIONS", 16, true);
         await renderSection('recommendations');
         addSpacer(8);
         
