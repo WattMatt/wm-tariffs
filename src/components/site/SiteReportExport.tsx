@@ -1942,14 +1942,6 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         await renderSection('meter-type-chart');
         await renderSection('consumption-chart');
         
-        addSubsectionHeading("Audit Period");
-        addText(`${format(new Date(reconciliationData.readingsPeriod.split(' - ')[0]), 'dd MMM yyyy')} - ${format(new Date(reconciliationData.readingsPeriod.split(' - ')[1]), 'dd MMM yyyy')}`);
-        addSpacer(5);
-        
-        addSubsectionHeading("Metering Infrastructure");
-        addText(`Total Meters Analyzed: ${reconciliationData.meterCount}`);
-        addSpacer(8);
-        
         // Section 8: Document & Invoice Validation (if documents available) (renumbered from 7)
         const docValidationContent = getSectionContent('document-validation');
         if (docValidationContent) {
