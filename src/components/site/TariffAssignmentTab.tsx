@@ -2901,6 +2901,25 @@ export default function TariffAssignmentTab({
                     monthOnly={true}
                   />
                 </div>
+                <div className="flex-1 space-y-2">
+                  <Label>Chart Metric</Label>
+                  <Select
+                    value={selectedChartMetric}
+                    onValueChange={setSelectedChartMetric}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select metric" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="total">Total Amount</SelectItem>
+                      <SelectItem value="basic">Basic Charge</SelectItem>
+                      <SelectItem value="kva-charge">kVA Charge</SelectItem>
+                      <SelectItem value="kwh-charge">kWh Charge</SelectItem>
+                      <SelectItem value="kva-consumption">kVA Consumption</SelectItem>
+                      <SelectItem value="kwh-consumption">kWh Consumption</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="flex gap-2">
                   <Button
                     onClick={applyDateFilter}
@@ -2924,7 +2943,7 @@ export default function TariffAssignmentTab({
               </div>
               {(activeFilterFrom && activeFilterTo) && (
                 <div className="text-sm text-muted-foreground bg-muted/50 p-2 rounded-md">
-                  Showing data from <span className="font-medium">{format(activeFilterFrom, 'MMM yyyy')}</span> to <span className="font-medium">{format(activeFilterTo, 'MMM yyyy')}</span>
+                  Showing <span className="font-medium">{getMetricLabel(selectedChartMetric)}</span> from <span className="font-medium">{format(activeFilterFrom, 'MMM yyyy')}</span> to <span className="font-medium">{format(activeFilterTo, 'MMM yyyy')}</span>
                 </div>
               )}
             </div>
@@ -3052,7 +3071,7 @@ export default function TariffAssignmentTab({
                         chartData = prepareComparisonData(filteredShops, costsMap, selectedChartMetric);
                       } else if (showDocumentCharts) {
                         // Analysis tab: always use document amounts (returns object with chartData property)
-                        const analysisResult = prepareAnalysisData(filteredShops);
+                        const analysisResult = prepareAnalysisData(filteredShops, selectedChartMetric);
                         chartData = Array.isArray(analysisResult) ? analysisResult : (analysisResult?.chartData || []);
                       } else {
                         // Assignments tab: use calculated tariff costs
