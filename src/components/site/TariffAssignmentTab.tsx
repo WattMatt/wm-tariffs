@@ -3065,6 +3065,8 @@ export default function TariffAssignmentTab({
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {meters.map((meter) => {
                       const matchingShops = getMatchingShopNumbers(meter);
+                      // Real uploaded documents (not virtual reconciliation docs)
+                      const realDocs = documentShopNumbers.filter(d => d.meterId === meter.id);
                       
                       if (matchingShops.length === 0) return null;
                       
@@ -3122,21 +3124,21 @@ export default function TariffAssignmentTab({
                                       : "bg-emerald-100 text-emerald-700 border-emerald-200"
                                   )}
                                 >
-                                  {isVirtualMeter(meter) ? "Virtual" : "Actual"}
+                                  {isVirtualMeter(meter) ? "Virtual" : "Physical"}
                                 </Badge>
                                 <Badge 
                                   variant="outline" 
                                   className={cn(
                                     "text-xs",
-                                    matchingShops.length > 0 
+                                    realDocs.length > 0 
                                       ? "bg-sky-100 text-sky-700 border-sky-200" 
                                       : "bg-amber-100 text-amber-700 border-amber-200"
                                   )}
                                 >
-                                  {matchingShops.length > 0 ? "Billed" : "Unbilled"}
+                                  {realDocs.length > 0 ? "Billed" : "Unbilled"}
                                 </Badge>
                                 <Badge variant="secondary" className="text-xs">
-                                  {matchingShops.length} doc{matchingShops.length > 1 ? 's' : ''}
+                                  {realDocs.length} doc{realDocs.length !== 1 ? 's' : ''}
                                 </Badge>
                               </div>
                             </div>
