@@ -3124,6 +3124,17 @@ export default function TariffAssignmentTab({
                                 >
                                   {isVirtualMeter(meter) ? "Virtual" : "Actual"}
                                 </Badge>
+                                <Badge 
+                                  variant="outline" 
+                                  className={cn(
+                                    "text-xs",
+                                    matchingShops.length > 0 
+                                      ? "bg-sky-100 text-sky-700 border-sky-200" 
+                                      : "bg-amber-100 text-amber-700 border-amber-200"
+                                  )}
+                                >
+                                  {matchingShops.length > 0 ? "Billed" : "Unbilled"}
+                                </Badge>
                                 <Badge variant="secondary" className="text-xs">
                                   {matchingShops.length} doc{matchingShops.length > 1 ? 's' : ''}
                                 </Badge>
