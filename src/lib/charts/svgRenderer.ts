@@ -329,6 +329,7 @@ export interface ReconciliationChartDataPointSVG {
   amount: number | null;
   documentAmount: number | null;
   meterReading: number | null;
+  isDiscontinuous?: boolean;
 }
 
 /**
@@ -423,27 +424,45 @@ export function generateReconciliationMeterChartSVG(
     svg += `<path d="M${docBarX},${docY + barRadius} Q${docBarX},${docY} ${docBarX + barRadius},${docY} L${docBarX + barWidth - barRadius},${docY} Q${docBarX + barWidth},${docY} ${docBarX + barWidth},${docY + barRadius} L${docBarX + barWidth},${topPadding + chartHeight} L${docBarX},${topPadding + chartHeight} Z" fill="${documentColor}"/>`;
   });
 
-  // Meter reading line
-  let linePath = '';
-  let isFirst = true;
+  // Meter reading line - segmented at discontinuities
+  const segments: string[] = [];
+  let currentSegment = '';
+  let segmentFirst = true;
+
   data.forEach((item, index) => {
     if (item.meterReading !== null) {
       const x = padding + index * clusterWidth + clusterWidth / 2;
       const y = topPadding + chartHeight - (item.meterReading / maxMeterReading) * chartHeight;
-      linePath += isFirst ? `M${x},${y}` : ` L${x},${y}`;
-      isFirst = false;
+      
+      // If this point is discontinuous, start a new segment here
+      if (item.isDiscontinuous && currentSegment) {
+        segments.push(currentSegment);
+        currentSegment = `M${x},${y}`;
+        segmentFirst = false;
+      } else {
+        currentSegment += segmentFirst ? `M${x},${y}` : ` L${x},${y}`;
+        segmentFirst = false;
+      }
     }
   });
-  if (linePath) {
-    svg += `<path d="${linePath}" fill="none" stroke="${meterReadingColor}" stroke-width="2"/>`;
-  }
 
-  // Meter reading dots
+  // Push final segment
+  if (currentSegment) segments.push(currentSegment);
+
+  // Draw all segments
+  segments.forEach(segment => {
+    svg += `<path d="${segment}" fill="none" stroke="${meterReadingColor}" stroke-width="2"/>`;
+  });
+
+  // Meter reading dots - RED for discontinuous, GREEN otherwise
   data.forEach((item, index) => {
     if (item.meterReading !== null) {
       const x = padding + index * clusterWidth + clusterWidth / 2;
       const y = topPadding + chartHeight - (item.meterReading / maxMeterReading) * chartHeight;
-      svg += `<circle cx="${x}" cy="${y}" r="4" fill="${meterReadingColor}"/>`;
+      const dotColor = item.isDiscontinuous ? '#ef4444' : meterReadingColor;
+      const dotRadius = item.isDiscontinuous ? 5 : 4;
+      const strokeAttr = item.isDiscontinuous ? ' stroke="#ffffff" stroke-width="2"' : '';
+      svg += `<circle cx="${x}" cy="${y}" r="${dotRadius}" fill="${dotColor}"${strokeAttr}/>`;
     }
   });
 
@@ -483,6 +502,7 @@ export interface AnalysisChartDataPointSVG {
   period: string;
   documentAmount: number | null;
   meterReading?: number | null;
+  isDiscontinuous?: boolean;
   isWinter?: boolean;
   isSummer?: boolean;
   [key: string]: string | number | boolean | null | undefined;
@@ -650,28 +670,46 @@ export function generateAnalysisMeterChartSVG(
     });
   });
 
-  // Meter reading line (green, solid)
+  // Meter reading line (green, solid) - segmented at discontinuities
   if (meterReadings.length > 0) {
-    let linePath = '';
-    let isFirst = true;
+    const segments: string[] = [];
+    let currentSegment = '';
+    let segmentFirst = true;
+
     data.forEach((item, index) => {
       if (item.meterReading !== null && item.meterReading !== undefined) {
         const x = padding + index * barSpacing + barSpacing / 2;
         const y = topPadding + chartHeight - (item.meterReading / maxMeterReading) * chartHeight;
-        linePath += isFirst ? `M${x},${y}` : ` L${x},${y}`;
-        isFirst = false;
+        
+        // If this point is discontinuous, start a new segment here
+        if (item.isDiscontinuous && currentSegment) {
+          segments.push(currentSegment);
+          currentSegment = `M${x},${y}`;
+          segmentFirst = false;
+        } else {
+          currentSegment += segmentFirst ? `M${x},${y}` : ` L${x},${y}`;
+          segmentFirst = false;
+        }
       }
     });
-    if (linePath) {
-      svg += `<path d="${linePath}" fill="none" stroke="${meterReadingColor}" stroke-width="2"/>`;
-    }
 
-    // Meter reading dots
+    // Push final segment
+    if (currentSegment) segments.push(currentSegment);
+
+    // Draw all segments
+    segments.forEach(segment => {
+      svg += `<path d="${segment}" fill="none" stroke="${meterReadingColor}" stroke-width="2"/>`;
+    });
+
+    // Meter reading dots - RED for discontinuous, GREEN otherwise
     data.forEach((item, index) => {
       if (item.meterReading !== null && item.meterReading !== undefined) {
         const x = padding + index * barSpacing + barSpacing / 2;
         const y = topPadding + chartHeight - (item.meterReading / maxMeterReading) * chartHeight;
-        svg += `<circle cx="${x}" cy="${y}" r="4" fill="${meterReadingColor}"/>`;
+        const dotColor = item.isDiscontinuous ? '#ef4444' : meterReadingColor;
+        const dotRadius = item.isDiscontinuous ? 5 : 4;
+        const strokeAttr = item.isDiscontinuous ? ' stroke="#ffffff" stroke-width="2"' : '';
+        svg += `<circle cx="${x}" cy="${y}" r="${dotRadius}" fill="${dotColor}"${strokeAttr}/>`;
       }
     });
 
