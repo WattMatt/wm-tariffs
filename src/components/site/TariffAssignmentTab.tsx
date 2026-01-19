@@ -525,7 +525,7 @@ export default function TariffAssignmentTab({
         amount: metricValue,
         documentAmount: metricValue || null,
         documentId: doc.documentId,
-        meterReading: readings.current,
+        meterReading: readings.current ?? 0,
         consumption: readings.current !== null && readings.previous !== null ? 
                     readings.current - readings.previous : null,
         isDiscontinuous
@@ -640,7 +640,7 @@ export default function TariffAssignmentTab({
         amount: reconciliationCostsMap[doc.documentId] !== undefined ? reconciliationCostsMap[doc.documentId] : null,
         documentAmount: extractMetricValue(doc, metric),
         documentId: doc.documentId,
-        meterReading: readings.current,
+        meterReading: readings.current ?? 0,
         consumption: readings.current !== null && readings.previous !== null ? 
                     readings.current - readings.previous : null,
         isDiscontinuous,
