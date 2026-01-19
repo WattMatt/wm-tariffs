@@ -249,13 +249,14 @@ export default function TariffAssignmentTab({
     const current = new Date(start);
     
     while (current <= end) {
-      const monthStart = new Date(current.getFullYear(), current.getMonth(), 1);
-      const monthEnd = new Date(current.getFullYear(), current.getMonth() + 1, 0, 23, 59, 59);
-      
-      // Find matching document for this month (based on period end date)
+      // Find matching document for this month (based on period end date month/year)
       const matchingDoc = shops.find(shop => {
+        if (!shop.periodEnd) return false;
         const periodEnd = new Date(shop.periodEnd);
-        return periodEnd >= monthStart && periodEnd <= monthEnd;
+        if (isNaN(periodEnd.getTime())) return false;
+        // Match by same month and year for more reliable matching
+        return periodEnd.getMonth() === current.getMonth() && 
+               periodEnd.getFullYear() === current.getFullYear();
       });
       
       allMonths.push({
@@ -372,8 +373,8 @@ export default function TariffAssignmentTab({
     }
     
     return {
-      previous: item?.previous_reading || null,
-      current: item?.current_reading || null
+      previous: typeof item?.previous_reading === 'number' ? item.previous_reading : null,
+      current: typeof item?.current_reading === 'number' ? item.current_reading : null
     };
   };
 
