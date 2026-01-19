@@ -73,7 +73,13 @@ interface Meter {
   meter_type: string;
   mccb_size: number | null;
   rating: string | null;
+  serial_number: string | null;
 }
+
+// Helper to determine if a meter is virtual
+const isVirtualMeter = (meter: Meter): boolean => {
+  return meter.serial_number?.toLowerCase() === 'virtual';
+};
 
 interface DocumentShopNumber {
   documentId: string;
@@ -1876,7 +1882,7 @@ export default function TariffAssignmentTab({
   const fetchMeters = async () => {
     const { data, error } = await supabase
       .from("meters")
-      .select("id, meter_number, name, tariff, tariff_structure_id, assigned_tariff_name, meter_type, mccb_size, rating")
+      .select("id, meter_number, name, tariff, tariff_structure_id, assigned_tariff_name, meter_type, mccb_size, rating, serial_number")
       .eq("site_id", siteId)
       .order("meter_number");
 
@@ -3106,9 +3112,22 @@ export default function TariffAssignmentTab({
                               <CardTitle className="text-base">
                                 {meter.meter_number}
                               </CardTitle>
-                              <Badge variant="secondary" className="text-xs">
-                                {matchingShops.length} doc{matchingShops.length > 1 ? 's' : ''}
-                              </Badge>
+                              <div className="flex items-center gap-1">
+                                <Badge 
+                                  variant="outline" 
+                                  className={cn(
+                                    "text-xs",
+                                    isVirtualMeter(meter) 
+                                      ? "bg-purple-100 text-purple-700 border-purple-200" 
+                                      : "bg-emerald-100 text-emerald-700 border-emerald-200"
+                                  )}
+                                >
+                                  {isVirtualMeter(meter) ? "Virtual" : "Actual"}
+                                </Badge>
+                                <Badge variant="secondary" className="text-xs">
+                                  {matchingShops.length} doc{matchingShops.length > 1 ? 's' : ''}
+                                </Badge>
+                              </div>
                             </div>
                           </CardHeader>
                           <CardContent className="pt-0 pb-1 px-1">
