@@ -249,14 +249,21 @@ export default function TariffAssignmentTab({
     const current = new Date(start);
     
     while (current <= end) {
-      // Find matching document for this month (based on period end date month/year)
+      const currentMonth = current.getMonth() + 1; // 1-12 format
+      const currentYear = current.getFullYear();
+      
+      // Find matching document for this month using string-based extraction to avoid timezone issues
       const matchingDoc = shops.find(shop => {
         if (!shop.periodEnd) return false;
-        const periodEnd = new Date(shop.periodEnd);
-        if (isNaN(periodEnd.getTime())) return false;
-        // Match by same month and year for more reliable matching
-        return periodEnd.getMonth() === current.getMonth() && 
-               periodEnd.getFullYear() === current.getFullYear();
+        
+        // Extract year and month from date string directly (handles "YYYY-MM-DD" format)
+        const yearMatch = shop.periodEnd.match(/^(\d{4})/);
+        if (!yearMatch) return false;
+        
+        const docMonth = getMonthFromDateString(shop.periodEnd); // Returns 1-12
+        const docYear = parseInt(yearMatch[1], 10);
+        
+        return docMonth === currentMonth && docYear === currentYear;
       });
       
       allMonths.push({
