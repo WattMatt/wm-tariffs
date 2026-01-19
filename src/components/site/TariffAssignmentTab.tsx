@@ -1903,6 +1903,10 @@ export default function TariffAssignmentTab({
           file_name,
           meter_id,
           document_extractions (
+            period_start,
+            period_end,
+            total_amount,
+            currency,
             extracted_data
           )
         `)
@@ -1936,11 +1940,12 @@ export default function TariffAssignmentTab({
             documentId: doc.id,
             fileName: doc.file_name,
             shopNumber: identifier,
-            periodStart: extractedData.period_start || '',
-            periodEnd: extractedData.period_end || '',
-            totalAmount: extractedData.total_amount || 0,
+            // Use database columns first (validated/corrected), fallback to extracted_data
+            periodStart: extraction.period_start || extractedData.period_start || '',
+            periodEnd: extraction.period_end || extractedData.period_end || '',
+            totalAmount: extraction.total_amount || extractedData.total_amount || 0,
             totalAmountExcludingEmergency: normalSupplyTotal,
-            currency: extractedData.currency || 'R',
+            currency: extraction.currency || extractedData.currency || 'R',
             tenantName: extractedData.tenant_name,
             accountReference: extractedData.account_reference,
             meterId: (doc as any).meter_id,
