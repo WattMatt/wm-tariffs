@@ -16,9 +16,10 @@ export interface MeterChartDataPoint {
   amount: number;
   documentAmount?: number;
   meterReading?: number;
+  meterReadingLine?: number | null; // null at discontinuities to break the line
   isDiscontinuous?: boolean;
   // Seasonal average segments
-  [key: string]: number | string | boolean | undefined;
+  [key: string]: number | string | boolean | null | undefined;
 }
 
 interface MeterAnalysisChartProps {
@@ -48,6 +49,22 @@ export function MeterAnalysisChart({
   isKvaMetric = false,
   hideDocumentBars = false,
 }: MeterAnalysisChartProps) {
+  // Process data to add meterReadingLine that breaks at discontinuities
+  const processedData = React.useMemo(() => {
+    return data.map((point, index) => {
+      // If the NEXT point is discontinuous, we need to break the line BEFORE it
+      // So we set the current point's line value to null if the next point is discontinuous
+      const nextPoint = data[index + 1];
+      const shouldBreakAfter = nextPoint?.isDiscontinuous;
+      
+      return {
+        ...point,
+        // meterReadingLine is null after a point that precedes a discontinuity
+        meterReadingLine: shouldBreakAfter ? null : point.meterReading,
+      };
+    });
+  }, [data]);
+
   // Extract seasonal segment keys from data
   const segmentKeys = new Set<string>();
   if (showSeasonalAverages) {
@@ -87,7 +104,7 @@ export function MeterAnalysisChart({
     <ChartContainer config={chartConfig} className="w-full" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart
-          data={data}
+          data={processedData}
           margin={{ top: 10, right: 80, left: 50, bottom: 70 }}
         >
           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -193,17 +210,30 @@ export function MeterAnalysisChart({
             />
           )}
 
-          {/* Meter reading line */}
+          {/* Meter reading line - uses meterReadingLine which has nulls at discontinuities to break line */}
           <Line
             yAxisId="right"
             type="monotone"
-            dataKey="meterReading"
+            dataKey="meterReadingLine"
             stroke="#22c55e"
             strokeWidth={2}
             name="Meter Reading"
             connectNulls={false}
+            dot={false}
+          />
+          
+          {/* Meter reading dots - separate so they show even at discontinuities */}
+          <Line
+            yAxisId="right"
+            type="monotone"
+            dataKey="meterReading"
+            stroke="transparent"
+            strokeWidth={0}
+            name="Meter Reading Dots"
+            legendType="none"
             dot={(props: any) => {
-              const { payload, cx, cy } = props;
+              const { payload, cx, cy, value } = props;
+              if (value === undefined || value === null) return null;
               if (payload?.isDiscontinuous) {
                 return (
                   <circle
