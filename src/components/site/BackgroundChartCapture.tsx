@@ -5,6 +5,7 @@ import type { ReconciliationChartDataPoint, AnalysisChartDataPoint } from "./Cha
 import { supabase } from "@/integrations/supabase/client";
 import { useBackgroundChartCapture, type CaptureItem } from "@/hooks/useBackgroundChartCapture";
 import type { ChartMetric, CaptureLogEntry as GenericLogEntry, ItemCaptureResult } from "@/lib/charts/types";
+import { extractDateFromTimestamp } from "@/lib/utils";
 
 // Document interface for reconciliation charts
 interface DocumentShopNumber {
@@ -213,7 +214,7 @@ const prepareChartData = async (
       
       docs.forEach(doc => {
         const docEnd = (doc.reconciliationDateTo || doc.periodEnd).substring(0, 7);
-        const reconEnd = run.date_to.substring(0, 7);
+        const reconEnd = extractDateFromTimestamp(run.date_to).substring(0, 7);
         
         if (docEnd === reconEnd) {
           let value: number | null = null;
