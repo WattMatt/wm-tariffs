@@ -254,8 +254,8 @@ const prepareChartData = async (
     const documentValue = extractMetricValue(doc, metric);
     const reconValue = reconCostsMap[doc.documentId];
     const readings = extractMeterReadings(doc, metric);
-    const periodDate = new Date(doc.periodEnd);
-    const period = periodDate.toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' });
+    // Use string-based extraction to avoid timezone issues
+    const period = formatPeriodFromDateString(doc.periodEnd);
     
     return {
       period,
@@ -272,6 +272,15 @@ const prepareChartData = async (
 const getMonthFromDateString = (dateString: string): number => {
   const [, month] = dateString.split('-');
   return parseInt(month);
+};
+
+// Helper: Convert YYYY-MM-DD date string to "Mon YYYY" format without timezone issues
+const formatPeriodFromDateString = (dateString: string): string => {
+  const [year, month] = dateString.split('-');
+  const monthNum = parseInt(month);
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${monthNames[monthNum - 1]} ${year}`;
 };
 
 // Prepare analysis chart data (with segment-based winter/summer averages)
@@ -357,7 +366,6 @@ const prepareAnalysisChartData = async (
   
   // Build chart data with segment-specific averages
   const chartData = sortedDocs.map(doc => {
-    const periodDate = new Date(doc.periodEnd);
     const month = getMonthFromDateString(doc.periodEnd);
     const isWinter = winterMonths.includes(month);
     const isSummer = summerMonths.includes(month);
@@ -379,7 +387,8 @@ const prepareAnalysisChartData = async (
     const readings = extractMeterReadings(doc, metric);
     
     return {
-      period: periodDate.toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
+      // Use string-based extraction to avoid timezone issues
+      period: formatPeriodFromDateString(doc.periodEnd),
       documentAmount: extractMetricValue(doc, metric),
       meterReading: readings.current,
       isWinter,
@@ -425,9 +434,9 @@ const prepareAssignmentChartData = async (
     // No tariff assigned, return null assigned values
     const sortedDocs = [...docs].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
     return sortedDocs.map(doc => {
-      const periodDate = new Date(doc.periodEnd);
       return {
-        period: periodDate.toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
+        // Use string-based extraction to avoid timezone issues
+        period: formatPeriodFromDateString(doc.periodEnd),
         documentValue: extractDocumentRate(doc, metric),
         assignedValue: null,
       };
@@ -449,14 +458,14 @@ const prepareAssignmentChartData = async (
   const sortedDocs = [...docs].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
   
   const chartData = sortedDocs.map(doc => {
-    const periodDate = new Date(doc.periodEnd);
     const season = getSeasonFromDateString(doc.periodEnd);
     
     const documentRate = extractDocumentRate(doc, metric);
     const assignedRate = extractAssignedRate(metric, season, tariffCharges || [], touPeriods || []);
     
     return {
-      period: periodDate.toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
+      // Use string-based extraction to avoid timezone issues
+      period: formatPeriodFromDateString(doc.periodEnd),
       documentValue: documentRate,
       assignedValue: assignedRate,
     };
