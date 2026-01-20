@@ -248,14 +248,20 @@ const prepareChartData = async (
     });
   }
 
-  const sortedDocs = [...docs].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
+  // Sort by reconciliationDateTo (preferred) or periodEnd - matches UI behavior
+  const sortedDocs = [...docs].sort((a, b) => {
+    const dateA = a.reconciliationDateTo || a.periodEnd;
+    const dateB = b.reconciliationDateTo || b.periodEnd;
+    return dateA.localeCompare(dateB);
+  });
   
   const chartData = sortedDocs.map(doc => {
     const documentValue = extractMetricValue(doc, metric);
     const reconValue = reconCostsMap[doc.documentId];
     const readings = extractMeterReadings(doc, metric);
-    // Use string-based extraction to avoid timezone issues
-    const period = formatPeriodFromDateString(doc.periodEnd);
+    // Use reconciliationDateTo (preferred) or periodEnd - matches UI behavior
+    const displayDateEnd = doc.reconciliationDateTo || doc.periodEnd;
+    const period = formatPeriodFromDateString(displayDateEnd);
     
     return {
       period,
@@ -294,7 +300,12 @@ const prepareAnalysisChartData = async (
   const winterMonths = [6, 7, 8];  // June, July, August
   const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];  // All other months
   
-  const sortedDocs = [...docs].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
+  // Sort by reconciliationDateTo (preferred) or periodEnd - matches UI behavior
+  const sortedDocs = [...docs].sort((a, b) => {
+    const dateA = a.reconciliationDateTo || a.periodEnd;
+    const dateB = b.reconciliationDateTo || b.periodEnd;
+    return dateA.localeCompare(dateB);
+  });
   
   // Build segments for consecutive months of same season
   interface Segment {
@@ -311,7 +322,8 @@ const prepareAnalysisChartData = async (
   let currentSegmentDocs: DocumentShopNumber[] = [];
   
   sortedDocs.forEach((doc, index) => {
-    const month = getMonthFromDateString(doc.periodEnd);
+    const displayDateEnd = doc.reconciliationDateTo || doc.periodEnd;
+    const month = getMonthFromDateString(displayDateEnd);
     const isWinter = winterMonths.includes(month);
     const isSummer = summerMonths.includes(month);
     const currentSeason = isWinter ? 'winter' : isSummer ? 'summer' : null;
@@ -366,7 +378,8 @@ const prepareAnalysisChartData = async (
   
   // Build chart data with segment-specific averages
   const chartData = sortedDocs.map(doc => {
-    const month = getMonthFromDateString(doc.periodEnd);
+    const displayDateEnd = doc.reconciliationDateTo || doc.periodEnd;
+    const month = getMonthFromDateString(displayDateEnd);
     const isWinter = winterMonths.includes(month);
     const isSummer = summerMonths.includes(month);
     
@@ -388,7 +401,7 @@ const prepareAnalysisChartData = async (
     
     return {
       // Use string-based extraction to avoid timezone issues
-      period: formatPeriodFromDateString(doc.periodEnd),
+      period: formatPeriodFromDateString(displayDateEnd),
       documentAmount: extractMetricValue(doc, metric),
       meterReading: readings.current,
       isWinter,
@@ -432,11 +445,17 @@ const prepareAssignmentChartData = async (
 
   if (!meter?.tariff_structure_id) {
     // No tariff assigned, return null assigned values
-    const sortedDocs = [...docs].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
+    // Sort by reconciliationDateTo (preferred) or periodEnd - matches UI behavior
+    const sortedDocs = [...docs].sort((a, b) => {
+      const dateA = a.reconciliationDateTo || a.periodEnd;
+      const dateB = b.reconciliationDateTo || b.periodEnd;
+      return dateA.localeCompare(dateB);
+    });
     return sortedDocs.map(doc => {
+      const displayDateEnd = doc.reconciliationDateTo || doc.periodEnd;
       return {
-        // Use string-based extraction to avoid timezone issues
-        period: formatPeriodFromDateString(doc.periodEnd),
+        // Use reconciliationDateTo (preferred) or periodEnd - matches UI behavior
+        period: formatPeriodFromDateString(displayDateEnd),
         documentValue: extractDocumentRate(doc, metric),
         assignedValue: null,
       };
@@ -455,17 +474,23 @@ const prepareAssignmentChartData = async (
     .select('season, period_type, energy_charge_cents')
     .eq('tariff_structure_id', meter.tariff_structure_id);
 
-  const sortedDocs = [...docs].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
+  // Sort by reconciliationDateTo (preferred) or periodEnd - matches UI behavior
+  const sortedDocs = [...docs].sort((a, b) => {
+    const dateA = a.reconciliationDateTo || a.periodEnd;
+    const dateB = b.reconciliationDateTo || b.periodEnd;
+    return dateA.localeCompare(dateB);
+  });
   
   const chartData = sortedDocs.map(doc => {
-    const season = getSeasonFromDateString(doc.periodEnd);
+    const displayDateEnd = doc.reconciliationDateTo || doc.periodEnd;
+    const season = getSeasonFromDateString(displayDateEnd);
     
     const documentRate = extractDocumentRate(doc, metric);
     const assignedRate = extractAssignedRate(metric, season, tariffCharges || [], touPeriods || []);
     
     return {
-      // Use string-based extraction to avoid timezone issues
-      period: formatPeriodFromDateString(doc.periodEnd),
+      // Use reconciliationDateTo (preferred) or periodEnd - matches UI behavior
+      period: formatPeriodFromDateString(displayDateEnd),
       documentValue: documentRate,
       assignedValue: assignedRate,
     };
