@@ -212,7 +212,7 @@ const prepareChartData = async (
       if (!run) return;
       
       docs.forEach(doc => {
-        const docEnd = doc.periodEnd.substring(0, 7);
+        const docEnd = (doc.reconciliationDateTo || doc.periodEnd).substring(0, 7);
         const reconEnd = run.date_to.substring(0, 7);
         
         if (docEnd === reconEnd) {
